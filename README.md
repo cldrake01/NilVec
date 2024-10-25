@@ -2,7 +2,7 @@
 
 ## Big Idea
 
-Most vector databses use too much memory. They use too much memory in how they handle metadata.
+Most vector databses use too much memory. In particular, they use too much memory in handling metadata.
 NilVec is a vector database that uses less memory by storing metadata within the vectors themselves.
 Without a purpose-built vector database like NilVec, storing metadata directly within vectors adversely
 affects the accuracy of nearest neighbor search since that metadata would contribute to the distance
