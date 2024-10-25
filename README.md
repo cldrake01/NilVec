@@ -45,7 +45,7 @@ $$
 \end{pmatrix}
 $$
 
-Here, the second vector acts as a conceptual filter, zeroing out metadata components so that they are not considered in
+Here, the second vector acts as a filter, zeroing out metadata components so that they are not considered in
 the distance calculations.
 
 ### Indexing and Metadata Retrieval
