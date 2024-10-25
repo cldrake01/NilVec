@@ -71,7 +71,7 @@ meta_a = v[i]
 
 [Google's ScaNN](https://github.com/google-research/google-research/tree/master/scann) is one of the fastest and most
 efficient libraries for approximate nearest neighbor search.
-Its [rules-of-thumb](https://github.com/google-research/google-research/blob/master/scann/docs/algorithms.md) are:
+[Its rules-of-thumb](https://github.com/google-research/google-research/blob/master/scann/docs/algorithms.md) are:
 
 - For a small dataset (fewer than 20k points), use brute-force.
 - For a dataset with less than 100k points, score with AH, then rescore.
