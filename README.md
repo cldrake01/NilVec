@@ -12,7 +12,8 @@ maintaining a global map of attributes to vector indices.
 Mathematically, we can represent a vector with metadata and its resultant product before being passed
 to the index as:
 
-$$\begin{pmatrix}
+$$
+\begin{pmatrix}
 .0 \\
 .1 \\
 \vdots \\
@@ -37,11 +38,8 @@ $$\begin{pmatrix}
 0 \\
 0 \\
 0 \\
-\end{pmatrix}$$
-
-```math
-\left( \sum_{k=1}^n a_k b_k \right)^2 \leq \left( \sum_{k=1}^n a_k^2 \right) \left( \sum_{k=1}^n b_k^2 \right)
-```
+\end{pmatrix}
+$$
 
 In actuality, we construct a global map of attributes to vector indices, e.g.,
 
