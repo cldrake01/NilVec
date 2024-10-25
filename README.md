@@ -7,7 +7,7 @@ memory-efficient by embedding metadata directly within the vectors themselves.
 
 In a traditional vector database, metadata should not be included within vectors, as it can significantly reduce the
 accuracy of nearest neighbor searches by contributing to distance calculations. NilVec avoids this issue by indexing
-only the core embedding components, thereby excluding metadata from the calculations. This ensures that metadata does not
+only the core embedding components, thereby excluding metadata from the calculations and ensuring that metadata does not
 affect search performance.
 
 ### How It Works
