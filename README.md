@@ -46,13 +46,13 @@ $$
 $$
 
 Here, the second vector acts as a filter, zeroing out metadata components so that they are not considered in
-the distance calculations.
+the distance calculations. As a result, NilVec ignores metadata components during search operations, focusing solely on
+the embedding values.
 
 ### Indexing and Metadata Retrieval
 
-NilVec ignores metadata components during search operations, focusing solely on the embedding values. Metadata is
-identified using a global map of indexes that indicates which components of the vector correspond to metadata. For
-example:
+Metadata is identified using a global map of indexes that indicates which components of the vector correspond to
+metadata. For example:
 
 ```python
 index.map = {
