@@ -15,7 +15,7 @@ affect search performance.
 To achieve this separation, NilVec maintains a global map of metadata indexes. This map identifies where metadata is
 stored within the vectors, allowing NilVec to filter out metadata during indexing and searching.
 
-Conceptually, a vector that contains metadata is represented as:
+*Conceptually*, a vector that contains metadata is represented as:
 
 $$
 \begin{pmatrix}
