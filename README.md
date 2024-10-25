@@ -41,14 +41,19 @@ $$
 \end{pmatrix}
 $$
 
-In actuality, we construct a global map of attributes to vector indices, e.g.,
+The primary index simply does not consider metadata when calculating distances as a result.
+To retrieve metadata, we construct a global map of attributes to vector indices, e.g.,
 
 ```python
-{
+index.map = {
+    "embedding": 0,
     "meta_a": 512,
     "meta_b": 513,
     "meta_c": 514,
 }
+
+i = index.map["meta_a"] # 512
+meta_a = v[i]
 ```
 
 ## Implementational Philosophy
@@ -60,8 +65,8 @@ Its rules-of-thumb are:
 - For a small dataset (fewer than 20k points), use brute-force.
 - For a dataset with less than 100k points, score with AH, then rescore.
 - For datasets larger than 100k points, partition, score with AH, then rescore.
-- When scoring with AH, dimensions_per_block should be set to 2.
-- When partitioning, num_leaves should be roughly the square root of the number of datapoints.
+- When scoring with AH, `dimensions_per_block` should be set to 2.
+- When partitioning,` num_leaves should` be roughly the square root of the number of datapoints.
 
 [Pinecone](https://docs.pinecone.io/home) has the industry's most user-friendly interface. It's as easy as:
 
