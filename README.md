@@ -46,7 +46,7 @@ $$
 \end{pmatrix}
 $$
 
-Here, the second vector acts as a filter, zeroing out metadata components so that they are not considered in
+Here, the second vector acts as a mask, zeroing out metadata components so that they are not considered in
 the distance calculations. As a result, NilVec ignores metadata components during search operations, focusing solely on
 the embedding values.
 
