@@ -5,7 +5,7 @@
 Most vector databases consume a lot of memory, especially when handling metadata. NilVec is designed to be more
 memory-efficient by embedding metadata directly within the vectors themselves.
 
-n a traditional vector database, metadata should not be included within vectors, as it can significantly reduce the
+In a traditional vector database, metadata should not be included within vectors, as it can significantly reduce the
 accuracy of nearest neighbor searches by contributing to distance calculations. NilVec avoids this issue by indexing
 only the core vector components, thereby excluding metadata from the calculations. This ensures that metadata does not
 affect search performance.
