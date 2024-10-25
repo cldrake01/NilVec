@@ -1,16 +1,20 @@
 # $\vec0$ NilVec
 
-## Big Idea
+## Overview
 
-Most vector databses use too much memory. In particular, they use too much memory in handling metadata.
-NilVec is a vector database that uses less memory by storing metadata within the vectors themselves.
-Without a purpose-built vector database like NilVec, storing metadata directly within vectors adversely
-affects the accuracy of nearest neighbor search since that metadata would contribute to the distance
-calculation. NilVec's indexes consider only the vector components, not the metadata. It does this by
-maintaining a global map of attributes to vector indices.
+Most vector databases consume a lot of memory, especially when handling metadata. NilVec is designed to be more
+memory-efficient by embedding metadata directly within the vectors themselves.
 
-Mathematically, we can represent a vector with metadata and its resultant product before being passed
-to the index as:
+In traditional vector databases, including metadata in vectors can reduce the accuracy of nearest neighbor searches, as
+the metadata contributes to the distance calculations. NilVec avoids this issue by indexing only the core vector
+components, excluding metadata from the calculations. This ensures that metadata does not affect search performance.
+
+### How It Works
+
+To achieve this separation, NilVec maintains a global map of metadata indexes. This map identifies where metadata is
+stored within the vectors, allowing NilVec to filter out metadata during indexing and searching.
+
+Conceptually, this can be illustrated using matrix notation. A vector that contains metadata is represented as:
 
 $$
 \begin{pmatrix}
@@ -41,8 +45,14 @@ $$
 \end{pmatrix}
 $$
 
-The primary index simply does not consider metadata when calculating distances as a result.
-To retrieve metadata, we construct a global map of attributes to vector indices, e.g.,
+Here, the second vector acts as a conceptual filter, zeroing out metadata components so that they are not considered in
+the distance calculations.
+
+### Indexing and Metadata Retrieval
+
+NilVec ignores metadata components during search operations, focusing solely on the embedding values. Metadata is
+identified using a global map of indexes that indicates which components of the vector correspond to metadata. For
+example:
 
 ```python
 index.map = {
@@ -52,7 +62,7 @@ index.map = {
     "meta_c": 514,
 }
 
-i = index.map["meta_a"] # 512
+i = index.map["meta_a"]  # 512
 meta_a = v[i]
 ```
 
