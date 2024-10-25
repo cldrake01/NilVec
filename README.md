@@ -14,7 +14,7 @@ components, excluding metadata from the calculations. This ensures that metadata
 To achieve this separation, NilVec maintains a global map of metadata indexes. This map identifies where metadata is
 stored within the vectors, allowing NilVec to filter out metadata during indexing and searching.
 
-Conceptually, this can be illustrated using matrix notation. A vector that contains metadata is represented as:
+Conceptually, a vector that contains metadata is represented as:
 
 $$
 \begin{pmatrix}
