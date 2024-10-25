@@ -51,7 +51,7 @@ the embedding values.
 
 ### Indexing and Metadata Retrieval
 
-Metadata is identified using a global map of indexes that indicates which components of the vector correspond to
+Metadata is retrieved using a global map of indexes that indicates which components of the vector correspond to
 metadata. For example:
 
 ```python
