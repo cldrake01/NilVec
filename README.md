@@ -8,12 +8,12 @@ memory-efficient by embedding metadata directly within the vectors themselves.
 In a traditional vector database, metadata ***should not*** be included within vectors, as it can significantly reduce
 the accuracy of nearest neighbor searches by contributing to distance calculations. NilVec avoids this issue by indexing
 only the core embedding components, thereby excluding metadata from the calculations and ensuring that metadata does not
-affect search performance.
+affect search accuracy.
 
 ### How It Works
 
 To achieve this separation, NilVec maintains a global map of metadata indexes. This map identifies where metadata is
-stored within the vectors, allowing NilVec to filter out metadata during indexing and searching.
+stored within the vectors, allowing NilVec to mask metadata during indexing and searching.
 
 *Conceptually*, a vector that contains metadata is represented as:
 
@@ -84,8 +84,8 @@ efficient libraries for approximate nearest neighbor search.
 ```python
 from pinecone import Pinecone, ServerlessSpec
 
-# Create a serverless index
-# "dimension" needs to match the dimensions of the vectors you upsert
+# Create a serverless index "dimension" needs to match the
+# dimensions of the vectors you upsert
 pc = Pinecone(api_key="YOUR_API_KEY")
 
 pc.create_index(
