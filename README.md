@@ -77,7 +77,7 @@ efficient libraries for approximate nearest neighbor search.
 - For a dataset with less than $100 \text{k}$ points, score with AH, then rescore.
 - For datasets larger than $100 \text{k}$ points, partition, score with AH, then rescore.
 - When scoring with AH, `dimensions_per_block` should be set to $2$.
-- When partitioning, `num_leaves should` be roughly the square root of the number of datapoints.
+- When partitioning, `num_leaves` should be roughly the square root of the number of datapoints.
 
 [Pinecone](https://docs.pinecone.io/home) has the industry's most user-friendly interface. It's as easy as:
 
