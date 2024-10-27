@@ -84,10 +84,10 @@ efficient libraries for approximate nearest neighbor search.
 ```python
 from pinecone import Pinecone, ServerlessSpec
 
-# Create a serverless index "dimension" needs to match the
-# dimensions of the vectors you upsert
 pc = Pinecone(api_key="YOUR_API_KEY")
 
+# Create a serverless index 
+# "dimension" needs to match the dimensions of the vectors you upsert
 pc.create_index(
     name="products",
     dimension=1536, 
