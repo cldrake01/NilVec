@@ -71,13 +71,13 @@ meta_a = v[i]
 
 [Google's ScaNN](https://github.com/google-research/google-research/tree/master/scann) is one of the fastest and most
 efficient libraries for approximate nearest neighbor search.
-[Its rules-of-thumb](https://github.com/google-research/google-research/blob/master/scann/docs/algorithms.md) are:
+[Its rules of thumb](https://github.com/google-research/google-research/blob/master/scann/docs/algorithms.md) are:
 
-- For a small dataset (fewer than $20 \text{k}$ points), use brute-force \[sic\].
-- For a dataset with less than $100 \text{k}$ points, score with AH, then rescore.
+- For a small dataset (fewer than $20 \text{k}$ points), use brute force.
+- For a dataset with fewer than $100 \text{k}$ points, score with AH, then rescore.
 - For datasets larger than $100 \text{k}$ points, partition, score with AH, then rescore.
 - When scoring with AH, `dimensions_per_block` should be set to $2$.
-- When partitioning, `num_leaves` should be roughly the square root of the number of datapoints.
+- When partitioning, `num_leaves` should be roughly the square root of the number of data points.
 
 [Pinecone](https://docs.pinecone.io/home) has the industry's most user-friendly interface. It's as easy as:
 
