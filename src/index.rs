@@ -56,5 +56,5 @@ where
 
         // Sort by size of element in ascending order
         packed.sort_by(|a, b| Ord::cmp(&a.1, &b.1));
-    }
+     }
 }
