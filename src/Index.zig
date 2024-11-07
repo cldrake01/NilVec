@@ -1,4 +1,9 @@
 const std = @import("std");
+const errors = @import("errors.zig");
+
+const Table = union(enum) {
+    hash_map: std.HashMap([]const u8, type),
+};
 
 /// Represents an HNSW vector index.
 ///
@@ -11,50 +16,58 @@ const std = @import("std");
 /// For example, the collection can be a `[]const ([]const u8, T)`,
 /// or any other iterable where each element is a tuple
 /// containing `[]const u8` and a corresponding type `T`.
-const Index = struct {
-    dim: u64,
-    table: []TableEntry,
-    metric: ?Metric = null,
+pub fn Index(dim: usize, table: Table, metric: ?Metric) !type {
+    return struct {
+        fn init(dim: u64, table: Table) !Index {
+            if (dim == 0) {
+                return errors.DimensionZero;
+            }
 
-    pub fn init(dim: u64, table: []TableEntry) !Index {
-        if (dim == 0) {
-            return error.DimensionZero;
+            const calc_dim = dim + Table.size;
+
+            const index: Index = Index{
+                .dim = calc_dim,
+                .table = table,
+                .metric = null,
+            };
+
+            index.pack(&table);
+
+            return index;
         }
 
-        const calc_dim = dim + table.len;
-        return Index{
-            .dim = calc_dim,
-            .table = table,
-            .metric = null,
-        };
-    }
-
-    /// The user may supply us a table with all
-    /// manner of types. Our job is to order the
-    /// table in a way that is most efficient in
-    /// terms of memory footprint and speed.
-    /// Moreover, these attributes will be
-    /// stored directly within each vector;
-    /// they need to be ordered in the most
-    /// compact way possible. Remember, accesses
-    /// are done 8 bytes (64 bits) at a time.
-    /// So, if we can order the table in a way
-    /// that minimizes cache misses, we can
-    /// speed up our search.
-    pub fn pack(self: *Index) void {
-        // Create a copy of the table to pack it
-        var rearranged = std.heap.auto_vec([]TableEntry, std.heap.page_allocator);
-        defer rearranged.deinit();
-
-        // Load elements into packed table
-        for (self.table) |entry| {
-            _ = rearranged.append(TableEntry{ .key = entry.key, .size = @sizeOf(entry.element) - 8 });
+        pub fn initFrom(v: []type) !Index {
+            return Index.init(v.len, v);
         }
 
-        // Sort by size in ascending order
-        std.sort.sort(rearranged.items, TableEntry.compare);
-    }
-};
+        /// The user may supply us a table with all
+        /// manner of types. Our job is to order the
+        /// table in a way that is most efficient in
+        /// terms of memory footprint and speed.
+        /// Moreover, these attributes will be
+        /// stored directly within each vector;
+        /// they need to be ordered in the most
+        /// compact way possible. Remember, accesses
+        /// are done 8 bytes (64 bits) at a time.
+        /// So, if we can order the table in a way
+        /// that minimizes cache misses, we can
+        /// speed up our search.
+        fn pack(table: *Table) void {
+            // Create a copy of the table to pack it
+            var rearranged = std.ArrayList(
+            defer rearranged.deinit();
+
+            // Load elements into packed table
+            for (table) |entry| {
+                // 8 due to cache alignment in bytes
+                rearranged.append(TableEntry{ .key = entry.key, .size = @sizeOf(entry.element) - 8 });
+            }
+
+            // Sort by size in ascending order
+            std.sort.sort(rearranged.items, TableEntry.compare);
+        }
+    };
+}
 
 const TableEntry = struct {
     key: []const u8,
