@@ -1,9 +1,12 @@
 const std = @import("std");
 const errors = @import("errors.zig");
 
-const Table = union(enum) {
-    hash_map: std.HashMap([]const u8, type),
+const TableEntry = struct {
+    key: []const u8,
+    value: type,
 };
+
+const Metric = struct {};
 
 /// Represents an HNSW vector index.
 ///
@@ -16,9 +19,11 @@ const Table = union(enum) {
 /// For example, the collection can be a `[]const ([]const u8, T)`,
 /// or any other iterable where each element is a tuple
 /// containing `[]const u8` and a corresponding type `T`.
-pub fn Index(dim: usize, table: Table, metric: ?Metric) !type {
+pub fn Index(dim: usize, table: anytype, metric: ?Metric) !type {
     return struct {
-        fn init(dim: u64, table: Table) !Index {
+        const Self = @This();
+        
+        fn init(dim: u64, table: Table) !Self {
             if (dim == 0) {
                 return errors.DimensionZero;
             }
@@ -36,7 +41,7 @@ pub fn Index(dim: usize, table: Table, metric: ?Metric) !type {
             return index;
         }
 
-        pub fn initFrom(v: []type) !Index {
+        pub fn initFrom(v: []type) !Self {
             return Index.init(v.len, v);
         }
 
@@ -52,39 +57,47 @@ pub fn Index(dim: usize, table: Table, metric: ?Metric) !type {
         /// So, if we can order the table in a way
         /// that minimizes cache misses, we can
         /// speed up our search.
-        fn pack(table: *Table) void {
-            // Create a copy of the table to pack it
-            var rearranged = std.ArrayList(
-            defer rearranged.deinit();
+        ///
+        /// The algorithm is as follows:
+        /// 1. Sort first by size // 8
+        /// 2. Sort second by size % 8
+        /// Yielding the following order:
+        /// [8, 4, 1, 11] -> // -> [1, 1, 0, 0]
+        /// [8, 4, 1, 11] -> % -> [0, 3, 1, 4]
+        /// Resulting in:
+        /// | 8, 1, 0|
+        /// |11, 1, 3|
+        /// | 1, 0, 1|
+        /// | 4, 0, 4|
+        fn pack(table: *Table) !void {
+            const n = table.len;
+            var matrix: [3][n]u32 = undefined;
 
-            // Load elements into packed table
-            for (table) |entry| {
-                // 8 due to cache alignment in bytes
-                rearranged.append(TableEntry{ .key = entry.key, .size = @sizeOf(entry.element) - 8 });
+            // Get sizes
+            var sizes: [n]u32 = undefined;
+            for (table, 0..n) |entry, i| {
+                sizes[i] = @sizeOf(entry.value);
             }
+            matrix[0] = sizes;
 
-            // Sort by size in ascending order
-            std.sort.sort(rearranged.items, TableEntry.compare);
+            // Sort on size / 8
+            var div: [n]u32 = undefined;
+            for (sizes, 0..n) |size, i| {
+                div[i] = @divTrunc(size, 8);
+            }
+            std.mem.sort(u32, &div, comptime std.sort.desc(u12));
+            matrix[1] = div;
+
+            // Sort on size % 8
+            var mod: [n]u32 = undefined;
+            for (sizes, 0..n) |size, i| {
+                mod[i] = @mod(size, 8);
+            }
+            std.mem.sort(u32, &mod, comptime std.sort.desc(u32));
+            matrix[2] = mod;
         }
     };
 }
-
-const TableEntry = struct {
-    key: []const u8,
-    element: []const u8,
-    size: usize,
-
-    pub fn compare(a: *TableEntry, b: *TableEntry) i32 {
-        const a_size: i32 = @intCast(a.size);
-        const b_size: i32 = @intCast(b.size);
-
-        return a_size - b_size;
-    }
-};
-
-const Metric = struct {
-    // Define fields based on your requirements
-};
 
 test "index creation and packing" {
     var table: [3]TableEntry = [_]TableEntry{
