@@ -3,7 +3,7 @@ const std = @import("std");
 pub fn HNSW() type {
     return struct {
         var assign_probas = std.ArrayList(f64).init(std.heap.ArenaAllocator);
-        var cum_nneighbor_per_level = std.ArrayList(i32).init(std.heap.ArenaAllocator);
+        var cum_nneighbor_per_level = std.ArrayList(u32).init(std.heap.ArenaAllocator);
 
         fn init() HNSW {}
 
@@ -23,16 +23,17 @@ pub fn HNSW() type {
         // }
         // ```
         fn defaultProbabilities(m: u32, level_mult: f32) void {
-            
-            var nn: i32 = 0;
+            var nn: i64 = 0;
             cum_nneighbor_per_level.append(0);
 
-            for (0..) |level| {
-                const prob = @exp(-level / level_mult) * (1 - @exp(-1 / level_mult));
+            var level: u64 = 0;
+            while (true) {
+                const prob: f64 = @exp(-level / level_mult) * (1 - @exp(-1 / level_mult));
                 if (prob < 1e-9)
                     break;
                 assign_probas.append(prob);
                 nn += if (level == 0) m * 2 else m;
+                level += 1;
             }
         }
     };

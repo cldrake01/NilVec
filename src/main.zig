@@ -1,4 +1,6 @@
 const std = @import("std");
+const Index = @import("index.zig").Index;
+const HNSW = @import("hnsw.zig").HNSW;
 
 pub fn main() !void {
     // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)

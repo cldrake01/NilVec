@@ -6,9 +6,13 @@ const TableEntry = struct {
     value: type,
 };
 
-const Metric = struct {};
+const Metric = enum {
+    euclidean,
+    cosine,
+    dot_product,
+};
 
-/// Represents an HNSW vector index.
+/// Represents a vector index.
 ///
 /// The user must specify the dimension of the vectors and
 /// supply a collection of string-type pairs. The collection
@@ -19,21 +23,21 @@ const Metric = struct {};
 /// For example, the collection can be a `[]const ([]const u8, T)`,
 /// or any other iterable where each element is a tuple
 /// containing `[]const u8` and a corresponding type `T`.
-pub fn Index(dim: usize, table: anytype, metric: ?Metric) !type {
+pub fn Index() !type {
     return struct {
         const Self = @This();
-        
-        fn init(dim: u64, table: Table) !Self {
+
+        fn init(dim: u64, table: anytype, metric: Metric) !Self {
             if (dim == 0) {
                 return errors.DimensionZero;
             }
 
-            const calc_dim = dim + Table.size;
+            const calc_dim = dim + table.size;
 
-            const index: Index = Index{
+            const index = Self{
                 .dim = calc_dim,
                 .table = table,
-                .metric = null,
+                .metric = metric,
             };
 
             index.pack(&table);
@@ -41,9 +45,7 @@ pub fn Index(dim: usize, table: anytype, metric: ?Metric) !type {
             return index;
         }
 
-        pub fn initFrom(v: []type) !Self {
-            return Index.init(v.len, v);
-        }
+        pub fn initFromVector() !Self {}
 
         /// The user may supply us a table with all
         /// manner of types. Our job is to order the
@@ -69,13 +71,13 @@ pub fn Index(dim: usize, table: anytype, metric: ?Metric) !type {
         /// |11, 1, 3|
         /// | 1, 0, 1|
         /// | 4, 0, 4|
-        fn pack(table: *Table) !void {
-            const n = table.len;
+        fn pack(self: *Self) !void {
+            const n = self.len;
             var matrix: [3][n]u32 = undefined;
 
             // Get sizes
             var sizes: [n]u32 = undefined;
-            for (table, 0..n) |entry, i| {
+            for (self, 0..n) |entry, i| {
                 sizes[i] = @sizeOf(entry.value);
             }
             matrix[0] = sizes;
@@ -85,7 +87,7 @@ pub fn Index(dim: usize, table: anytype, metric: ?Metric) !type {
             for (sizes, 0..n) |size, i| {
                 div[i] = @divTrunc(size, 8);
             }
-            std.mem.sort(u32, &div, comptime std.sort.desc(u12));
+            std.mem.sort(u32, &div, comptime std.sort.desc(u32));
             matrix[1] = div;
 
             // Sort on size % 8
