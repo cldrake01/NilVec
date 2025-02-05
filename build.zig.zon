@@ -51,6 +51,7 @@
         //    // actually used.
         //    .lazy = false,
         //},
+        .ziglangSet = .{ .url = "https://github.com/deckarep/ziglang-set/archive/c22dcf53c7664a254bb7bb64ee7c019d9ab91d40.tar.gz", .hash = "1220e30d1494cccc9f6c327ed7eb41b3b20b1b3e2cc900f2dce0e901193e30fc6442" },
     },
 
     // Specifies the set of files and directories that are included in this package.
