@@ -199,6 +199,10 @@ pub fn HNSW(comptime T: type, comptime D: usize) type {
                 return error.NoSchema;
             }
 
+            if (filter) |f| {
+                _ = try self.attributeIndex(f.attribute);
+            }
+
             // Initialize the nearest-neighbors list and candidate heap as before.
             const best = Candidate{ .distance = self.metric(query, self.vectors.items[entry]), .id = entry };
 
@@ -240,7 +244,6 @@ pub fn HNSW(comptime T: type, comptime D: usize) type {
                     // Skip the block if no attribute or filter
                     if (filter) |f| {
                         const attribute_index = try self.attributeIndex(f.attribute);
-                        std.debug.print("Attribute index: {}\n", .{attribute_index});
                         const metadata = self.metadata.items[neighbor + attribute_index];
 
                         if (!f.condition(metadata)) {
