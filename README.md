@@ -1,11 +1,15 @@
-# $\vec0$ NilVec
+<!-- # $\vec0$ NilVec -->
+
+<!-- <img src="./NilVec.png" alt="NilVec Logo" width="500"/> -->
+
+![NilVec Logo](NilVec.png)
 
 ## Overview
 
 Most vector databases consume a lot of memory, especially when handling metadata. NilVec is designed to be more
 memory-efficient by embedding metadata directly within the vectors themselves.
 
-In a traditional vector database, metadata ***should not*** be included within vectors, as it can significantly reduce
+In a traditional vector database, metadata **_should not_** be included within vectors, as it can significantly reduce
 the accuracy of nearest neighbor searches by contributing to distance calculations. NilVec avoids this issue by indexing
 only the core embedding components, thereby excluding metadata from the calculations and ensuring that metadata does not
 affect search accuracy.
@@ -15,7 +19,7 @@ affect search accuracy.
 To achieve this separation, NilVec maintains a global map of metadata indexes. This map identifies where metadata is
 stored within the vectors, allowing NilVec to mask metadata during indexing and searching.
 
-*Conceptually*, a vector that contains metadata is represented as:
+_Conceptually_, a vector that contains metadata is represented as:
 
 $$
 \begin{pmatrix}
@@ -86,12 +90,12 @@ from pinecone import Pinecone, ServerlessSpec
 
 pc = Pinecone(api_key="YOUR_API_KEY")
 
-# Create a serverless index 
+# Create a serverless index
 # "dimension" needs to match the dimensions of the vectors you upsert
 pc.create_index(
     name="products",
-    dimension=1536, 
-    spec=ServerlessSpec(cloud='aws', region='us-east-1') 
+    dimension=1536,
+    spec=ServerlessSpec(cloud='aws', region='us-east-1')
 )
 
 # Target the index
@@ -106,5 +110,13 @@ index.upsert(
   vectors=[
     {"id": "some_id", "values": vector, "metadata": metadata}
   ]
-) 
+)
+```
+
+## Testing
+
+To test NilVec, run:
+
+```bash
+zig build test
 ```

@@ -345,7 +345,7 @@ pub fn MinMaxHeap(comptime T: type) type {
 
             const lvl = Self.level(maxIndex);
 
-            if (Self.parentIndex(maxIndex)) |p| {
+            if (Self.pArentIndex(maxIndex)) |p| {
                 if (lvl % 2 == 0) {
                     if (Self.key(self.data.items[maxIndex]) > Self.key(self.data.items[p])) {
                         self.swap(maxIndex, p);

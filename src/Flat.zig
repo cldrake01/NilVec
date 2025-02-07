@@ -1,14 +1,14 @@
 const std = @import("std");
 const testing = std.testing;
 
-const MinMaxHeap = @import("MinMaxHeap.zig").MinMaxHeap;
-const Metadata = @import("Metadata.zig").Metadata;
-const Candidate = @import("Candidate.zig").Candidate;
-const Metric = @import("Metric.zig").Metric;
-const ID = @import("ID.zig").ID;
-const Filter = @import("Filter.zig").Filter;
+const ID = @import("id.zig").ID;
+const Metadata = @import("metadata.zig").Metadata;
+const Candidate = @import("candidate.zig").Candidate;
+const Metric = @import("metric.zig").Metric;
+const Filter = @import("filter.zig").Filter;
+const MinMaxHeap = @import("min_max_heap.zig").MinMaxHeap;
 
-pub fn Flat(comptime T: type, comptime D: usize) type {
+pub fn Flat(comptime T: type, comptime N: usize) type {
     comptime {
         switch (@typeInfo(T)) {
             .Int, .Float, .ComptimeInt, .ComptimeFloat => {},
@@ -17,7 +17,7 @@ pub fn Flat(comptime T: type, comptime D: usize) type {
             },
         }
 
-        if (D == 0) {
+        if (N == 0) {
             @compileError("Dimension cannot be zero.");
         }
     }
@@ -25,10 +25,10 @@ pub fn Flat(comptime T: type, comptime D: usize) type {
     return struct {
         const Self = @This();
 
-        vectors: std.ArrayList([D]T),
+        vectors: std.ArrayList([N]T),
         // Tombstones: tombstones.items[i] is true if node i is deleted.
         tombstones: std.ArrayList(bool),
-        metric: *const fn (@Vector(D, T), @Vector(D, T)) f64,
+        metric: *const fn (@Vector(N, T), @Vector(N, T)) f64,
         // Optional schema and metadata
         // The metadata for any vector begins at its id and ends at the lenght of the schema,
         // e.g., metadata[id..id + schema.len] is the metadata for the vector at id.
@@ -46,7 +46,7 @@ pub fn Flat(comptime T: type, comptime D: usize) type {
             } else &Self.euclideanDistance;
 
             return Self{
-                .vectors = std.ArrayList([D]T).init(allocator),
+                .vectors = std.ArrayList([N]T).init(allocator),
                 .tombstones = std.ArrayList(bool).init(allocator),
                 .metric = metric_,
                 .schema = schema,
@@ -66,7 +66,7 @@ pub fn Flat(comptime T: type, comptime D: usize) type {
             self.metadata.deinit();
         }
 
-        pub fn search(self: *Self, query: [D]T, k: ?usize, filter: ?Filter) ![]Candidate {
+        pub fn search(self: *Self, query: [N]T, k: ?usize, filter: ?Filter) ![]Candidate {
             const k_ = k orelse 1;
             var heap = try MinMaxHeap(Candidate).init(self.allocator);
             defer heap.deinit();
@@ -110,7 +110,7 @@ pub fn Flat(comptime T: type, comptime D: usize) type {
             return results.toOwnedSlice();
         }
 
-        pub fn insert(self: *Self, vector: [D]T, metadata: ?std.ArrayList(Metadata)) !void {
+        pub fn insert(self: *Self, vector: [N]T, metadata: ?std.ArrayList(Metadata)) !void {
             try self.vectors.append(vector);
             try self.tombstones.append(false);
 
@@ -120,7 +120,7 @@ pub fn Flat(comptime T: type, comptime D: usize) type {
         }
 
         /// Builds the index from a set of vectors.
-        pub fn create(self: *Self, vectors: std.ArrayList([D]T), metadata: ?std.ArrayList(std.ArrayList(Metadata))) !void {
+        pub fn create(self: *Self, vectors: std.ArrayList([N]T), metadata: ?std.ArrayList(std.ArrayList(Metadata))) !void {
             if (vectors.items.len == 0) {
                 return error.EmptyVectors;
             }
@@ -143,7 +143,7 @@ pub fn Flat(comptime T: type, comptime D: usize) type {
         }
 
         /// Marks the nearest node as deleted.
-        pub fn deleteNearest(self: *Self, query: [D]T) !void {
+        pub fn deleteNearest(self: *Self, query: [N]T) !void {
             const nearest = try self.search(query, 1, null);
             defer self.allocator.free(nearest);
 
@@ -219,10 +219,10 @@ pub fn Flat(comptime T: type, comptime D: usize) type {
             return error.AttributeNotFound;
         }
 
-        fn euclideanDistance(a: @Vector(D, T), b: @Vector(D, T)) f64 {
+        fn euclideanDistance(a: @Vector(N, T), b: @Vector(N, T)) f64 {
             var sum: f64 = 0.0;
 
-            for (0..D) |i| {
+            for (0..N) |i| {
                 const diff = a[i] - b[i];
                 sum += diff * diff;
             }
@@ -230,17 +230,17 @@ pub fn Flat(comptime T: type, comptime D: usize) type {
             return @sqrt(sum);
         }
 
-        fn dotProduct(a: @Vector(D, T), b: @Vector(D, T)) f64 {
+        fn dotProduct(a: @Vector(N, T), b: @Vector(N, T)) f64 {
             var sum: f64 = 0.0;
 
-            for (0..D) |i| {
+            for (0..N) |i| {
                 sum += a[i] * b[i];
             }
 
             return sum;
         }
 
-        fn cosineSimilarity(a: @Vector(D, T), b: @Vector(D, T)) f64 {
+        fn cosineSimilarity(a: @Vector(N, T), b: @Vector(N, T)) f64 {
             const dot = Self.dotProduct(a, b);
             const normA = Self.dotProduct(a, a);
             const normB = Self.dotProduct(b, b);

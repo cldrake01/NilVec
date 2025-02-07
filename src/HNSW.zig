@@ -2,12 +2,12 @@ const std = @import("std");
 // const set = @import("ziglangSet");
 const testing = std.testing;
 
-const ID = @import("ID.zig").ID;
-const MinMaxHeap = @import("MinMaxHeap.zig").MinMaxHeap;
-const Candidate = @import("Candidate.zig").Candidate;
-const Filter = @import("Filter.zig").Filter;
-const Metadata = @import("Metadata.zig").Metadata;
-const Metric = @import("Metric.zig").Metric;
+const ID = @import("id.zig").ID;
+const Metadata = @import("metadata.zig").Metadata;
+const Candidate = @import("candidate.zig").Candidate;
+const Metric = @import("metric.zig").Metric;
+const Filter = @import("filter.zig").Filter;
+const MinMaxHeap = @import("min_max_heap.zig").MinMaxHeap;
 
 // Inserts a Candidate into a sorted ArrayList while maintaining order
 fn insort(nns: *std.ArrayList(Candidate), item: Candidate) !void {
@@ -22,7 +22,7 @@ fn insort(nns: *std.ArrayList(Candidate), item: Candidate) !void {
     try nns.insert(i, item);
 }
 
-pub fn HNSW(comptime T: type, comptime D: usize) type {
+pub fn HNSW(comptime T: type, comptime N: usize) type {
     comptime {
         switch (@typeInfo(T)) {
             .Int, .Float, .ComptimeInt, .ComptimeFloat => {},
@@ -31,7 +31,7 @@ pub fn HNSW(comptime T: type, comptime D: usize) type {
             },
         }
 
-        if (D == 0) {
+        if (N == 0) {
             @compileError("Dimension cannot be zero.");
         }
     }
@@ -48,7 +48,7 @@ pub fn HNSW(comptime T: type, comptime D: usize) type {
         ef_construction: usize,
         // Number of neighbors to consider during search
         ef_search: usize,
-        vectors: std.ArrayList([D]T),
+        vectors: std.ArrayList([N]T),
         // connections: std.ArrayList(std.ArrayList(ID)),
         connections: std.ArrayList(ID),
         // Start index of neighbors for each node
@@ -59,7 +59,7 @@ pub fn HNSW(comptime T: type, comptime D: usize) type {
         tombstones: std.ArrayList(bool),
         // Precomputed assignment probabilities for each layer.
         assignment_probabilities: std.ArrayList(f64),
-        metric: *const fn (@Vector(D, T), @Vector(D, T)) f64,
+        metric: *const fn (@Vector(N, T), @Vector(N, T)) f64,
         // Optional schema and metadata
         // The metadata for any vector begins at its id and ends at the lenght of the schema,
         // e.g., metadata[id..id + schema.len] is the metadata for the vector at id.
@@ -104,7 +104,7 @@ pub fn HNSW(comptime T: type, comptime D: usize) type {
                 .ml = ml,
                 .ef_construction = ef_construction_,
                 .ef_search = ef_search_,
-                .vectors = std.ArrayList([D]T).init(allocator),
+                .vectors = std.ArrayList([N]T).init(allocator),
                 .connections = std.ArrayList(ID).init(allocator),
                 .offsets = std.ArrayList(usize).init(allocator),
                 .levels = std.ArrayList(usize).init(allocator),
@@ -132,7 +132,7 @@ pub fn HNSW(comptime T: type, comptime D: usize) type {
             self.metadata.deinit();
         }
 
-        pub fn search(self: *Self, query: [D]T, k: ?usize, filter: ?Filter) ![]Candidate {
+        pub fn search(self: *Self, query: [N]T, k: ?usize, filter: ?Filter) ![]Candidate {
             const k_ = k orelse 1;
 
             // If there are no vectors, return an empty list.
@@ -186,7 +186,7 @@ pub fn HNSW(comptime T: type, comptime D: usize) type {
             return trimmed.toOwnedSlice();
         }
 
-        fn knn(self: *Self, entry: ID, query: [D]T, ef: usize, layer: usize, filter: ?Filter) ![]Candidate {
+        fn knn(self: *Self, entry: ID, query: [N]T, ef: usize, layer: usize, filter: ?Filter) ![]Candidate {
             if (ef == 0) {
                 return error.InvalidEF;
             }
@@ -269,7 +269,7 @@ pub fn HNSW(comptime T: type, comptime D: usize) type {
             return nns.toOwnedSlice();
         }
 
-        pub fn insert(self: *Self, vector: [D]T, metadata: ?std.ArrayList(Metadata), efc: ?usize, rng: *std.rand.DefaultPrng) !void {
+        pub fn insert(self: *Self, vector: [N]T, metadata: ?std.ArrayList(Metadata), efc: ?usize, rng: *std.rand.DefaultPrng) !void {
             // Use the provided efc or the instance default.
             const efc_ = efc orelse self.ef_construction;
 
@@ -340,7 +340,7 @@ pub fn HNSW(comptime T: type, comptime D: usize) type {
         /// Builds the index from a list of vectors.
         pub fn create(
             self: *Self,
-            vectors: std.ArrayList([D]T),
+            vectors: std.ArrayList([N]T),
             metadata: ?std.ArrayList(std.ArrayList(Metadata)),
             efc: ?usize,
             rng: *std.rand.DefaultPrng,
@@ -434,7 +434,7 @@ pub fn HNSW(comptime T: type, comptime D: usize) type {
 
         /// Finds the nearest neighbor to `vector` and deletes it (marks it as deleted).
         /// Tombstoned nodes are ignored during search.
-        pub fn deleteNearest(self: *Self, vector: [D]T, filter: ?Filter) !void {
+        pub fn deleteNearest(self: *Self, vector: [N]T, filter: ?Filter) !void {
             const results = try self.search(vector, 1, filter);
             defer self.allocator.free(results);
 
@@ -453,7 +453,7 @@ pub fn HNSW(comptime T: type, comptime D: usize) type {
             const old_count = self.vectors.items.len;
 
             // Allocate new array lists for the cleaned index.
-            var new_vectors = std.ArrayList([D]T).init(self.allocator);
+            var new_vectors = std.ArrayList([N]T).init(self.allocator);
             var new_levels = std.ArrayList(usize).init(self.allocator);
             var new_tombstones = std.ArrayList(bool).init(self.allocator);
             var new_offsets = std.ArrayList(usize).init(self.allocator);
@@ -562,10 +562,10 @@ pub fn HNSW(comptime T: type, comptime D: usize) type {
             self.metadata.items[id + index] = value;
         }
 
-        fn euclideanDistance(a: @Vector(D, T), b: @Vector(D, T)) f64 {
+        fn euclideanDistance(a: @Vector(N, T), b: @Vector(N, T)) f64 {
             var sum: f64 = 0.0;
 
-            for (0..D) |i| {
+            for (0..N) |i| {
                 const diff = a[i] - b[i];
                 sum += diff * diff;
             }
@@ -573,17 +573,17 @@ pub fn HNSW(comptime T: type, comptime D: usize) type {
             return @sqrt(sum);
         }
 
-        fn dotProduct(a: @Vector(D, T), b: @Vector(D, T)) f64 {
+        fn dotProduct(a: @Vector(N, T), b: @Vector(N, T)) f64 {
             var sum: f64 = 0.0;
 
-            for (0..D) |i| {
+            for (0..N) |i| {
                 sum += a[i] * b[i];
             }
 
             return sum;
         }
 
-        fn cosineSimilarity(a: @Vector(D, T), b: @Vector(D, T)) f64 {
+        fn cosineSimilarity(a: @Vector(N, T), b: @Vector(N, T)) f64 {
             const dot = Self.dotProduct(a, b);
             const normA = Self.dotProduct(a, a);
             const normB = Self.dotProduct(b, b);

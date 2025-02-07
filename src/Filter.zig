@@ -1,4 +1,4 @@
-const Metadata = @import("Metadata.zig").Metadata;
+const Metadata = @import("metadata.zig").Metadata;
 
 pub const Filter = struct {
     attribute: []const u8,

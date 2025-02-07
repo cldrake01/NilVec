@@ -1,5 +1,5 @@
 const std = @import("std");
-const ID = @import("ID.zig").ID;
+const ID = @import("id.zig").ID;
 
 pub const Candidate = struct {
     const Self = @This();
