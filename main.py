@@ -1,5 +1,6 @@
 import time
 import random
+import numpy as np
 import matplotlib.pyplot as plt
 import nilvec  # This is your PyO3 module exposing PyHNSW
 import chromadb
@@ -15,7 +16,7 @@ collection = client.create_collection(name="test_collection")
 # Configuration
 dim = 10             # Dimension of each vector
 num_inserts = 100    # Number of vectors to insert
-num_queries = 100     # Number of search queries to time
+num_queries = 10     # Number of search queries to time
 categories = ["news", "blog", "report"]
 
 # --- Insertion Timing for Chroma ---
@@ -53,7 +54,6 @@ for i in range(num_queries):
     result_count = len(results.get("ids", [[]])[0])
     print(f"[Chroma] Query {i+1}/{num_queries} took {elapsed:.4f} seconds, returned {result_count} results.")
 
-
 # ------------------------------
 # NilVec Test
 # ------------------------------
@@ -87,24 +87,53 @@ for i in range(num_queries):
     nilvec_query_times.append(elapsed)
     print(f"[NilVec] Query {i+1}/{num_queries} took {elapsed:.4f} seconds, returned {len(results)} results.")
 
-
 # ------------------------------
 # Combined Plotting & Saving
 # ------------------------------
 
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
 
-# Plot combined insertion times
-ax1.plot(range(1, num_inserts + 1), chroma_insert_times, marker='o', label='Chroma')
-ax1.plot(range(1, num_inserts + 1), nilvec_insert_times, marker='s', label='NilVec')
+# X values for insertion and query operations
+x_inserts = np.arange(1, num_inserts + 1)
+x_queries = np.arange(1, num_queries + 1)
+
+# --- Insertion Times Plot ---
+# Scatter plots with slight transparency and no connecting lines.
+ax1.scatter(x_inserts, chroma_insert_times, marker='o', alpha=0.7, label='Chroma Points')
+ax1.scatter(x_inserts, nilvec_insert_times, marker='s', alpha=0.7, label='NilVec Points')
+
+# Compute and plot best-fit lines.
+# For Chroma:
+coeffs = np.polyfit(x_inserts, chroma_insert_times, 1)
+poly = np.poly1d(coeffs)
+ax1.plot(x_inserts, poly(x_inserts), linestyle='--', color='blue', label='Chroma Best Fit')
+
+# For NilVec:
+coeffs = np.polyfit(x_inserts, nilvec_insert_times, 1)
+poly = np.poly1d(coeffs)
+ax1.plot(x_inserts, poly(x_inserts), linestyle='--', color='orange', label='NilVec Best Fit')
+
 ax1.set_title("Insertion Times Comparison")
 ax1.set_xlabel("Insert Operation")
 ax1.set_ylabel("Time (seconds)")
 ax1.legend()
 
-# Plot combined query times
-ax2.plot(range(1, num_queries + 1), chroma_query_times, marker='o', label='Chroma')
-ax2.plot(range(1, num_queries + 1), nilvec_query_times, marker='s', label='NilVec')
+# --- Query Times Plot ---
+# Scatter plots with slight transparency.
+ax2.scatter(x_queries, chroma_query_times, marker='o', alpha=0.7, label='Chroma Points')
+ax2.scatter(x_queries, nilvec_query_times, marker='s', alpha=0.7, label='NilVec Points')
+
+# Compute and plot best-fit lines.
+# For Chroma:
+coeffs = np.polyfit(x_queries, chroma_query_times, 1)
+poly = np.poly1d(coeffs)
+ax2.plot(x_queries, poly(x_queries), linestyle='--', color='blue', label='Chroma Best Fit')
+
+# For NilVec:
+coeffs = np.polyfit(x_queries, nilvec_query_times, 1)
+poly = np.poly1d(coeffs)
+ax2.plot(x_queries, poly(x_queries), linestyle='--', color='orange', label='NilVec Best Fit')
+
 ax2.set_title("Query Times Comparison")
 ax2.set_xlabel("Query Operation")
 ax2.set_ylabel("Time (seconds)")
