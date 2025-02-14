@@ -272,7 +272,7 @@ impl HNSW {
     /// Bulk-creates the index from a list of vectors (and optional metadata).
     pub fn create<R: Rng>(
         &mut self,
-        vectors: &[&[f64]],
+        vectors: Vec<&[f64]>,
         metadatas: Option<&[&[Metadata]]>,
         efc: Option<usize>,
         rng: &mut R,
@@ -854,5 +854,13 @@ impl PyHNSW {
                     .collect()
             })
             .map_err(|e| PyValueError::new_err(format!("Search error: {:?}", e)))
+    }
+
+    /// Create an index from a list of vectors.
+    pub fn create(&mut self, vectors: Vec<Vec<f64>>) -> PyResult<()> {
+        let vecs: Vec<&[f64]> = vectors.iter().map(|v| v.as_slice()).collect();
+        self.inner
+            .create(vecs, None, None, &mut rand::rng())
+            .map_err(|e| PyValueError::new_err(format!("Create error: {:?}", e)))
     }
 }
