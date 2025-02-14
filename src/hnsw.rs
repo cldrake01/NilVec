@@ -818,7 +818,7 @@ impl PyHNSW {
         metric: Option<String>,
     ) -> PyResult<Self> {
         let metric_enum = match metric.as_deref() {
-            Some("cosine") => Some(Metric::Cosine),
+            Some("angular") => Some(Metric::Cosine),
             Some("inner_product") => Some(Metric::InnerProduct),
             _ => Some(Metric::L2),
         };
