@@ -1,6 +1,6 @@
 [package]
 name = "nilvec"
-version = "0.1.0"
+version = "0.1.2"
 edition = "2021"
 description = "A library for approximate nearest neighbor search in Rust."
 license = "MIT"

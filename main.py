@@ -1,13 +1,116 @@
-import nilvec
+import time
+import random
+import matplotlib.pyplot as plt
+import nilvec  # This is your PyO3 module exposing PyHNSW
+import chromadb
+
+# ------------------------------
+# Chroma Test
+# ------------------------------
+
+# Setup Chroma client and collection (in-memory instance)
+client = chromadb.Client()
+collection = client.create_collection(name="test_collection")
+
+# Configuration
+dim = 10             # Dimension of each vector
+num_inserts = 100    # Number of vectors to insert
+num_queries = 100     # Number of search queries to time
+categories = ["news", "blog", "report"]
+
+# --- Insertion Timing for Chroma ---
+chroma_insert_times = []
+print("Chroma: Inserting vectors with metadata:")
+for i in range(num_inserts):
+    vector = [random.random() for _ in range(dim)]
+    metadata = {"category": random.choice(categories)}
+
+    start_time = time.perf_counter()
+    collection.add(
+        ids=[str(i)],
+        embeddings=[vector],
+        metadatas=[metadata],
+        documents=[""]  # Documents are optional; here we use an empty string.
+    )
+    elapsed = time.perf_counter() - start_time
+    chroma_insert_times.append(elapsed)
+    print(f"[Chroma] Inserted vector {i+1}/{num_inserts} in {elapsed:.4f} seconds.")
+
+# --- Query Timing for Chroma ---
+chroma_query_times = []
+print("\nChroma: Running search queries:")
+for i in range(num_queries):
+    query = [random.random() for _ in range(dim)]
+
+    start_time = time.perf_counter()
+    results = collection.query(
+        query_embeddings=[query],
+        n_results=5,
+    )
+    elapsed = time.perf_counter() - start_time
+    chroma_query_times.append(elapsed)
+
+    result_count = len(results.get("ids", [[]])[0])
+    print(f"[Chroma] Query {i+1}/{num_queries} took {elapsed:.4f} seconds, returned {result_count} results.")
 
 
-def main():
-    hnsw = nilvec.PyHNSW(128, None, None, None, None, None)
-    vec = [1.0] * 128
-    hnsw.insert(vec)
-    print("Search")
-    print(hnsw.search(vec, 1))
+# ------------------------------
+# NilVec Test
+# ------------------------------
+
+# Create an instance of PyHNSW with the given schema.
+# The constructor signature is: PyHNSW(dim, layers, m, ef_construction, ef_search, metric, schema)
+hnsw = nilvec.PyFlat(dim, ["category"])
+
+# --- Insertion Timing for NilVec ---
+nilvec_insert_times = []
+print("\nNilVec: Inserting vectors with metadata:")
+for i in range(num_inserts):
+    vector = [random.random() for _ in range(dim)]
+    metadata = [("category", random.choice(categories))]
+
+    start_time = time.perf_counter()
+    hnsw.insert(vector, metadata)
+    elapsed = time.perf_counter() - start_time
+    nilvec_insert_times.append(elapsed)
+    print(f"[NilVec] Inserted vector {i+1}/{num_inserts} in {elapsed:.4f} seconds.")
+
+# --- Query Timing for NilVec ---
+nilvec_query_times = []
+print("\nNilVec: Running search queries:")
+for i in range(num_queries):
+    query = [random.random() for _ in range(dim)]
+
+    start_time = time.perf_counter()
+    results = hnsw.search(query, 5)
+    elapsed = time.perf_counter() - start_time
+    nilvec_query_times.append(elapsed)
+    print(f"[NilVec] Query {i+1}/{num_queries} took {elapsed:.4f} seconds, returned {len(results)} results.")
 
 
-if __name__ == "__main__":
-    main()
+# ------------------------------
+# Combined Plotting & Saving
+# ------------------------------
+
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+
+# Plot combined insertion times
+ax1.plot(range(1, num_inserts + 1), chroma_insert_times, marker='o', label='Chroma')
+ax1.plot(range(1, num_inserts + 1), nilvec_insert_times, marker='s', label='NilVec')
+ax1.set_title("Insertion Times Comparison")
+ax1.set_xlabel("Insert Operation")
+ax1.set_ylabel("Time (seconds)")
+ax1.legend()
+
+# Plot combined query times
+ax2.plot(range(1, num_queries + 1), chroma_query_times, marker='o', label='Chroma')
+ax2.plot(range(1, num_queries + 1), nilvec_query_times, marker='s', label='NilVec')
+ax2.set_title("Query Times Comparison")
+ax2.set_xlabel("Query Operation")
+ax2.set_ylabel("Time (seconds)")
+ax2.legend()
+
+plt.tight_layout()
+plt.savefig("combined_performance.png")
+print("\nCombined plot saved as 'combined_performance.png'.")
+plt.show()
