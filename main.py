@@ -60,7 +60,7 @@ for i in range(num_queries):
 
 # Create an instance of PyHNSW with the given schema.
 # The constructor signature is: PyHNSW(dim, layers, m, ef_construction, ef_search, metric, schema)
-hnsw = nilvec.PyFlat(dim, ["category"])
+hnsw = nilvec.PyHNSW(dim, None, None, None, None, None, ["category"])
 
 # --- Insertion Timing for NilVec ---
 nilvec_insert_times = []
