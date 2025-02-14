@@ -216,6 +216,10 @@ impl HNSW {
         Ok(nns)
     }
 
+    fn vector_from_id(&self, id: usize) -> Vec<f64> {
+        self.vectors[id * self.dim..(id + 1) * self.dim].to_vec()
+    }
+
     /// Inserts a new vector (with optional metadata) into the index.
     pub fn insert<R: Rng>(
         &mut self,
@@ -843,14 +847,14 @@ impl PyHNSW {
     /// Search for the k nearest neighbors.
     ///
     /// Returns a list of tuples `(id, distance)`.
-    pub fn search(&self, query: Vec<f64>, k: Option<usize>) -> PyResult<Vec<(usize, f64)>> {
+    pub fn search(&self, query: Vec<f64>, k: Option<usize>) -> PyResult<Vec<(f64, Vec<f64>)>> {
         let k = k.unwrap_or(1);
         self.inner
             .search(&query, Some(k), None)
             .map(|candidates| {
                 candidates
                     .into_iter()
-                    .map(|c| (c.id, f64::from(c.distance)))
+                    .map(|c| (c.distance.into_inner(), self.inner.vector_from_id(c.id)))
                     .collect()
             })
             .map_err(|e| PyValueError::new_err(format!("Search error: {:?}", e)))
