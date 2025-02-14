@@ -39,27 +39,30 @@ for i in range(num_inserts):
 
 # --- Query Timing for Chroma ---
 chroma_query_times = []
-print("\nChroma: Running search queries:")
+print("\nChroma: Running search queries with metadata filtering:")
 for i in range(num_queries):
     query = [random.random() for _ in range(dim)]
+    # Choose a random category filter for this query.
+    filter_category = random.choice(categories)
 
     start_time = time.perf_counter()
     results = collection.query(
         query_embeddings=[query],
         n_results=5,
+        where={"category": filter_category}
     )
     elapsed = time.perf_counter() - start_time
     chroma_query_times.append(elapsed)
 
     result_count = len(results.get("ids", [[]])[0])
-    print(f"[Chroma] Query {i+1}/{num_queries} took {elapsed:.4f} seconds, returned {result_count} results.")
+    print(f"[Chroma] Query {i+1}/{num_queries} (where category = '{filter_category}') took {elapsed:.4f} seconds, returned {result_count} results.")
 
 # ------------------------------
 # NilVec Test
 # ------------------------------
 
 # Create an instance of PyHNSW with the given schema.
-# The constructor signature is: PyHNSW(dim, layers, m, ef_construction, ef_search, metric, schema)
+# Constructor: PyHNSW(dim, layers, m, ef_construction, ef_search, metric, schema)
 hnsw = nilvec.PyHNSW(dim, None, None, None, None, None, ["category"])
 
 # --- Insertion Timing for NilVec ---
@@ -86,6 +89,32 @@ for i in range(num_queries):
     elapsed = time.perf_counter() - start_time
     nilvec_query_times.append(elapsed)
     print(f"[NilVec] Query {i+1}/{num_queries} took {elapsed:.4f} seconds, returned {len(results)} results.")
+
+# ------------------------------
+# Performance Improvement Calculation
+# ------------------------------
+
+# Compute average times.
+avg_chroma_insert = np.mean(chroma_insert_times)
+avg_nilvec_insert = np.mean(nilvec_insert_times)
+avg_chroma_query = np.mean(chroma_query_times)
+avg_nilvec_query = np.mean(nilvec_query_times)
+
+# Calculate percentage improvement (lower time is better).
+insert_improvement = ((avg_chroma_insert - avg_nilvec_insert) / avg_chroma_insert) * 100
+query_improvement = ((avg_chroma_query - avg_nilvec_query) / avg_chroma_query) * 100
+overall_improvement = (insert_improvement + query_improvement) / 2
+
+print("\n--- Performance Improvement ---")
+print(f"Average Insertion Time (Chroma): {avg_chroma_insert:.4f} seconds")
+print(f"Average Insertion Time (NilVec):   {avg_nilvec_insert:.4f} seconds")
+print(f"Insertion Improvement:           {insert_improvement:.2f}%")
+
+print(f"Average Query Time (Chroma):     {avg_chroma_query:.4f} seconds")
+print(f"Average Query Time (NilVec):       {avg_nilvec_query:.4f} seconds")
+print(f"Query Improvement:               {query_improvement:.2f}%")
+
+print(f"\nOverall Average Performance Improvement for NilVec relative to Chroma: {overall_improvement:.2f}%")
 
 # ------------------------------
 # Combined Plotting & Saving
