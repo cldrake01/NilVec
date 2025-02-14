@@ -2,7 +2,7 @@ use ordered_float::OrderedFloat;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use rand::Rng;
-use std::collections::{BinaryHeap, HashSet};
+use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::sync::Arc; // requires the rand crate
 
 /// Possible errors in HNSW operations.
@@ -795,7 +795,7 @@ mod tests {
     }
 }
 
-/// Our Python-facing HNSW type. It wraps HNSW specialized to f64.
+// Python-facing wrapper type.
 #[pyclass]
 pub struct PyHNSW {
     inner: HNSW,
@@ -805,9 +805,10 @@ pub struct PyHNSW {
 impl PyHNSW {
     /// Create a new HNSW index.
     ///
-    /// - `dim`: dimension of the vectors.
-    /// - `layers`, `m`, `ef_construction`, `ef_search` are optional.
-    /// - `metric`: an optional string ("l2", "cosine", "inner_product") defaults to "l2".
+    /// * `dim`: dimension of the vectors.
+    /// * `layers`, `m`, `ef_construction`, `ef_search`: optional parameters.
+    /// * `metric`: an optional string ("l2", "angular", "inner_product") defaults to "l2".
+    /// * `schema`: an optional list of attribute names for metadata.
     #[new]
     pub fn new(
         dim: usize,
@@ -816,6 +817,7 @@ impl PyHNSW {
         ef_construction: Option<usize>,
         ef_search: Option<usize>,
         metric: Option<String>,
+        schema: Option<Vec<String>>,
     ) -> PyResult<Self> {
         let metric_enum = match metric.as_deref() {
             Some("angular") => Some(Metric::Cosine),
@@ -830,7 +832,7 @@ impl PyHNSW {
                 ef_construction,
                 ef_search,
                 metric_enum,
-                None,
+                schema,
             ),
         })
     }
@@ -838,15 +840,61 @@ impl PyHNSW {
     /// Insert a vector into the index.
     ///
     /// The vector is expected as a list of floats.
-    pub fn insert(&mut self, vector: Vec<f64>) -> PyResult<()> {
+    /// Optionally, metadata can be provided as a list of tuples, e.g.:
+    /// `[("color", "blue"), ("size", 42)]`
+    pub fn insert(
+        &mut self,
+        vector: Vec<f64>,
+        metadata: Option<Vec<(String, PyObject)>>,
+        py: Python,
+    ) -> PyResult<()> {
+        // If metadata is provided, convert each tuple into a Metadata value.
+        let meta_converted = if let Some(meta_tuples) = metadata {
+            // Ensure a schema was set when the index was created.
+            let schema = self.inner.schema.as_ref().ok_or_else(|| {
+                PyValueError::new_err("No schema provided in HNSW instance; cannot use metadata")
+            })?;
+            // Build a map from attribute name to PyObject.
+            let meta_map: HashMap<String, PyObject> = meta_tuples.into_iter().collect();
+            // Create a vector of Metadata in the order defined by the schema.
+            let mut meta_vec = Vec::with_capacity(schema.len());
+            for attr in schema {
+                if let Some(py_val) = meta_map.get(attr) {
+                    // Directly extract the value from the PyObject.
+                    let md = if let Ok(s) = py_val.extract::<String>(py) {
+                        Metadata::Str(s)
+                    } else if let Ok(i) = py_val.extract::<i64>(py) {
+                        Metadata::Int(i)
+                    } else if let Ok(f) = py_val.extract::<f64>(py) {
+                        Metadata::Float(f)
+                    } else {
+                        return Err(PyValueError::new_err(format!(
+                            "Unsupported metadata type for attribute '{}'",
+                            attr
+                        )));
+                    };
+                    meta_vec.push(md);
+                } else {
+                    return Err(PyValueError::new_err(format!(
+                        "Missing metadata for attribute '{}'",
+                        attr
+                    )));
+                }
+            }
+            Some(meta_vec)
+        } else {
+            None
+        };
+
+        let mut rng = rand::rng();
         self.inner
-            .insert(&vector, None, None, &mut rand::rng())
+            .insert(&vector, meta_converted.as_deref(), None, &mut rng)
             .map_err(|e| PyValueError::new_err(format!("Insert error: {:?}", e)))
     }
 
     /// Search for the k nearest neighbors.
     ///
-    /// Returns a list of tuples `(id, distance)`.
+    /// Returns a list of tuples `(distance, vector)`.
     pub fn search(&self, query: Vec<f64>, k: Option<usize>) -> PyResult<Vec<(f64, Vec<f64>)>> {
         let k = k.unwrap_or(1);
         self.inner
@@ -860,11 +908,65 @@ impl PyHNSW {
             .map_err(|e| PyValueError::new_err(format!("Search error: {:?}", e)))
     }
 
-    /// Create an index from a list of vectors.
-    pub fn create(&mut self, vectors: Vec<Vec<f64>>) -> PyResult<()> {
+    pub fn create(
+        &mut self,
+        vectors: Vec<Vec<f64>>,
+        metadata: Option<Vec<Vec<(String, PyObject)>>>,
+        py: Python,
+    ) -> PyResult<()> {
+        // Convert vectors into slices.
         let vecs: Vec<&[f64]> = vectors.iter().map(|v| v.as_slice()).collect();
-        self.inner
-            .create(vecs, None, None, &mut rand::rng())
-            .map_err(|e| PyValueError::new_err(format!("Create error: {:?}", e)))
+        let mut rng = rand::thread_rng();
+
+        if let Some(meta_lists) = metadata {
+            if meta_lists.len() != vectors.len() {
+                return Err(PyValueError::new_err(
+                    "Length of metadata list must match number of vectors",
+                ));
+            }
+            // Get the schema from the inner HNSW.
+            let schema = self.inner.schema.as_ref().ok_or_else(|| {
+                PyValueError::new_err("No schema provided in HNSW instance; cannot use metadata")
+            })?;
+            // In this block, build the owned metadata vectors.
+            let mut meta_vecs: Vec<Vec<Metadata>> = Vec::with_capacity(meta_lists.len());
+            for meta_tuples in meta_lists {
+                let meta_map: HashMap<String, PyObject> = meta_tuples.into_iter().collect();
+                let mut meta_vec: Vec<Metadata> = Vec::with_capacity(schema.len());
+                for attr in schema {
+                    if let Some(py_val) = meta_map.get(attr) {
+                        let md = if let Ok(s) = py_val.extract::<String>(py) {
+                            Metadata::Str(s)
+                        } else if let Ok(i) = py_val.extract::<i64>(py) {
+                            Metadata::Int(i)
+                        } else if let Ok(f) = py_val.extract::<f64>(py) {
+                            Metadata::Float(f)
+                        } else {
+                            return Err(PyValueError::new_err(format!(
+                                "Unsupported metadata type for attribute '{}'",
+                                attr
+                            )));
+                        };
+                        meta_vec.push(md);
+                    } else {
+                        return Err(PyValueError::new_err(format!(
+                            "Missing metadata for attribute '{}'",
+                            attr
+                        )));
+                    }
+                }
+                meta_vecs.push(meta_vec);
+            }
+            // Create a vector of references that borrow from meta_vecs.
+            let meta_refs: Vec<&[Metadata]> = meta_vecs.iter().map(|v| v.as_slice()).collect();
+            // Call inner.create while meta_vecs (and thus meta_refs) are still alive.
+            self.inner
+                .create(vecs, Some(meta_refs.as_slice()), None, &mut rng)
+                .map_err(|e| PyValueError::new_err(format!("Create error: {:?}", e)))
+        } else {
+            self.inner
+                .create(vecs, None, None, &mut rng)
+                .map_err(|e| PyValueError::new_err(format!("Create error: {:?}", e)))
+        }
     }
 }
