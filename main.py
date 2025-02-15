@@ -78,17 +78,20 @@ for i in range(num_inserts):
     nilvec_insert_times.append(elapsed)
     print(f"[NilVec] Inserted vector {i+1}/{num_inserts} in {elapsed:.4f} seconds.")
 
-# --- Query Timing for NilVec ---
+# --- Query Timing for NilVec with metadata filtering ---
 nilvec_query_times = []
-print("\nNilVec: Running search queries:")
+print("\nNilVec: Running search queries with metadata filtering:")
 for i in range(num_queries):
     query = [random.random() for _ in range(dim)]
+    # Choose a random category filter for this query.
+    filter_category = random.choice(categories)
 
     start_time = time.perf_counter()
-    results = hnsw.search(query, 5)
+    # The third parameter is the filter tuple (attribute, value)
+    results = hnsw.search(query, 5, ("category", filter_category))
     elapsed = time.perf_counter() - start_time
     nilvec_query_times.append(elapsed)
-    print(f"[NilVec] Query {i+1}/{num_queries} took {elapsed:.4f} seconds, returned {len(results)} results.")
+    print(f"[NilVec] Query {i+1}/{num_queries} (where category = '{filter_category}') took {elapsed:.4f} seconds, returned {len(results)} results.")
 
 # ------------------------------
 # Performance Improvement Calculation

@@ -895,17 +895,53 @@ impl PyHNSW {
     /// Search for the k nearest neighbors.
     ///
     /// Returns a list of tuples `(distance, vector)`.
-    pub fn search(&self, query: Vec<f64>, k: Option<usize>) -> PyResult<Vec<(f64, Vec<f64>)>> {
+    #[pyo3(signature = (query, k=None, filter=None))]
+    pub fn search(
+        &self,
+        py: Python,
+        query: Vec<f64>,
+        k: Option<usize>,
+        filter: Option<(String, PyObject)>,
+    ) -> PyResult<Vec<(f64, Vec<f64>)>> {
         let k = k.unwrap_or(1);
-        self.inner
-            .search(&query, Some(k), None)
-            .map(|candidates| {
-                candidates
-                    .into_iter()
-                    .map(|c| (c.distance.into_inner(), self.inner.vector_from_id(c.id)))
-                    .collect()
-            })
-            .map_err(|e| PyValueError::new_err(format!("Search error: {:?}", e)))
+        let candidates = if let Some((attribute, expected_value)) = filter {
+            // Ensure that a schema was set when the index was created.
+            if self.inner.schema.is_none() {
+                return Err(PyValueError::new_err(
+                    "No schema provided in HNSW instance; cannot use metadata filtering",
+                ));
+            }
+            // Convert the expected value from Python into a Metadata value.
+            let expected_md = if let Ok(s) = expected_value.extract::<String>(py) {
+                Metadata::Str(s)
+            } else if let Ok(i) = expected_value.extract::<i64>(py) {
+                Metadata::Int(i)
+            } else if let Ok(f) = expected_value.extract::<f64>(py) {
+                Metadata::Float(f)
+            } else {
+                return Err(PyValueError::new_err(
+                    "Unsupported type for metadata filter",
+                ));
+            };
+
+            // Create a Filter that checks for equality.
+            let filter_obj = Filter {
+                attribute,
+                condition: Arc::new(move |meta: &Metadata| meta == &expected_md),
+            };
+            self.inner
+                .search(&query, Some(k), Some(&filter_obj))
+                .map_err(|e| PyValueError::new_err(format!("Search error: {:?}", e)))?
+        } else {
+            self.inner
+                .search(&query, Some(k), None)
+                .map_err(|e| PyValueError::new_err(format!("Search error: {:?}", e)))?
+        };
+
+        Ok(candidates
+            .into_iter()
+            .map(|c| (c.distance.into_inner(), self.inner.vector_from_id(c.id)))
+            .collect())
     }
 
     pub fn create(
