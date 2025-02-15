@@ -5,6 +5,11 @@ use rand::Rng;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::sync::Arc; // requires the rand crate
 
+use crate::candidate::Candidate;
+use crate::filter::Filter;
+use crate::metadata::Metadata;
+use crate::metric::Metric;
+
 /// Possible errors in HNSW operations.
 #[derive(Debug, Clone)]
 pub enum HNSWError {
@@ -15,46 +20,6 @@ pub enum HNSWError {
     AttributeNotFound,
     EmptyVectors,
     InvalidNodeID,
-}
-
-/// A simple metadata type.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Metadata {
-    Str(String),
-    Int(i64),
-    Float(f64),
-}
-
-/// A candidate for nearest‐neighbor search.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Candidate {
-    pub distance: OrderedFloat<f64>,
-    pub id: usize,
-}
-
-/// Which distance metric to use.
-#[derive(Debug, Clone)]
-pub enum Metric {
-    L2,
-    Cosine,
-    InnerProduct,
-}
-
-/// A filter that checks an attribute’s metadata.
-pub struct Filter {
-    pub attribute: String,
-    // Use Arc so that the closure is cloneable, and require 'static.
-    pub condition: Arc<dyn Fn(&Metadata) -> bool + Send + Sync + 'static>,
-}
-
-// Manually implement Clone (though Arc is cloneable)
-impl Clone for Filter {
-    fn clone(&self) -> Self {
-        Filter {
-            attribute: self.attribute.clone(),
-            condition: self.condition.clone(),
-        }
-    }
 }
 
 /// The HNSW index structure.
