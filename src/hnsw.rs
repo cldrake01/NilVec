@@ -827,7 +827,9 @@ impl PyHNSW {
         let metric_enum = match metric.as_deref() {
             Some("angular") => Some(Metric::Cosine),
             Some("inner_product") => Some(Metric::InnerProduct),
-            _ => Some(Metric::L2),
+            Some("euclidean") | _ => Some(Metric::L2),
+            // Throws an error if the metric is not recognized.
+            _ => return Err(PyValueError::new_err("Unsupported metric")),
         };
         Ok(PyHNSW {
             inner: HNSW::new(
