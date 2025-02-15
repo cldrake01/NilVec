@@ -131,12 +131,12 @@ query_improvement = ((avg_chroma_query - avg_nilvec_query) / avg_chroma_query) *
 overall_improvement = (insert_improvement + query_improvement) / 2
 
 print("\n--- Performance Improvement ---")
-print(f"Average Insertion Time (Chroma): {avg_chroma_insert:.4f} seconds")
-print(f"Average Insertion Time (NilVec):   {avg_nilvec_insert:.4f} seconds")
+print(f"Average Insertion Time (Chroma): {avg_chroma_insert:.5f} seconds")
+print(f"Average Insertion Time (NilVec):   {avg_nilvec_insert:.5f} seconds")
 print(f"Insertion Improvement:           {insert_improvement:.2f}%")
 
-print(f"Average Query Time (Chroma):     {avg_chroma_query:.4f} seconds")
-print(f"Average Query Time (NilVec):       {avg_nilvec_query:.4f} seconds")
+print(f"Average Query Time (Chroma):     {avg_chroma_query:.5f} seconds")
+print(f"Average Query Time (NilVec):       {avg_nilvec_query:.5f} seconds")
 print(f"Query Improvement:               {query_improvement:.2f}%")
 
 print(

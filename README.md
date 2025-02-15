@@ -81,6 +81,21 @@ NilVec is distributed as a Python package via its PyO3 bindings. You can install
 pip install nilvec
 ```
 
+To build NilVec from source, follow these steps:
+
+1. Clone the repository:
+
+   ```bash
+   git clone https://github.com/cldrake01/nilvec.git
+   cd nilvec
+   ```
+
+2. Build the project:
+
+   ```bash
+   matruin develop --release
+   ```
+
 ### Examples
 
 Below is a quick example of how to use NilVec in your Python project:
