@@ -273,18 +273,18 @@ impl HNSW {
         Ok(())
     }
 
-    /// Bulk-creates the index from a list of vectors (and optional metadata).
+    /// Bulk-creates the index from a slice of vectors (and optional metadata).
     pub fn create<R: Rng>(
         &mut self,
-        vectors: Vec<&[f64]>,
-        metadatas: Option<&[&[Metadata]]>,
+        vectors: &[&[f64]],
+        metadata: Option<&[&[Metadata]]>,
         efc: Option<usize>,
         rng: &mut R,
     ) -> Result<(), HNSWError> {
         if vectors.is_empty() {
             return Err(HNSWError::EmptyVectors);
         }
-        if let (Some(meta_list), Some(_)) = (metadatas, &self.schema) {
+        if let (Some(meta_list), Some(_)) = (metadata, &self.schema) {
             if meta_list.len() != vectors.len() {
                 return Err(HNSWError::AttributeNotFound);
             }
@@ -293,7 +293,7 @@ impl HNSW {
             }
             return Ok(());
         }
-        for vec in vectors {
+        for vec in vectors.iter() {
             self.insert(vec, None, efc, rng)?;
         }
         Ok(())
@@ -793,6 +793,46 @@ mod tests {
         let result = hnsw.search(&vec, Some(1), Some(&filter));
         assert!(result.is_err());
     }
+
+    #[test]
+    fn test_hnsw_create_without_metadata() {
+        let mut hnsw = HNSW::new(2, None, None, None, None, None, None);
+        let seed: u64 = 42;
+        let mut rng = StdRng::seed_from_u64(seed);
+
+        // Define points as a slice of slices.
+        let points: &[&[f64]] = &[
+            &[-1.0, -1.0],
+            &[-1.0, 1.0],
+            &[1.0, 1.0],
+            &[1.0, -1.0],
+            &[0.0, 0.0],
+        ];
+
+        hnsw.create(points, None, None, &mut rng).unwrap();
+        assert_eq!(hnsw.vectors.len() / hnsw.dim, 5);
+    }
+
+    #[test]
+    fn test_hnsw_create_with_metadata() {
+        // Create an index with a schema.
+        let schema = vec!["color".to_string()];
+        let mut hnsw = HNSW::new(2, None, None, None, None, None, Some(schema));
+        let seed: u64 = 101;
+        let mut rng = StdRng::seed_from_u64(seed);
+
+        let points: &[&[f64]] = &[&[1.0, 2.0], &[2.0, 3.0], &[10.0, 10.0]];
+
+        // Create corresponding metadata for each vector.
+        let metadata: &[&[Metadata]] = &[
+            &[Metadata::Str("blue".to_string())],
+            &[Metadata::Str("red".to_string())],
+            &[Metadata::Str("blue".to_string())],
+        ];
+
+        hnsw.create(points, Some(metadata), None, &mut rng).unwrap();
+        assert_eq!(hnsw.vectors.len() / hnsw.dim, 3);
+    }
 }
 
 // Python-facing wrapper type.
@@ -997,11 +1037,11 @@ impl PyHNSW {
             let meta_refs: Vec<&[Metadata]> = meta_vecs.iter().map(|v| v.as_slice()).collect();
             // Call inner.create while meta_vecs (and thus meta_refs) are still alive.
             self.inner
-                .create(vecs, Some(meta_refs.as_slice()), None, &mut rng)
+                .create(vecs.as_slice(), Some(meta_refs.as_slice()), None, &mut rng)
                 .map_err(|e| PyValueError::new_err(format!("Create error: {:?}", e)))
         } else {
             self.inner
-                .create(vecs, None, None, &mut rng)
+                .create(vecs.as_slice(), None, None, &mut rng)
                 .map_err(|e| PyValueError::new_err(format!("Create error: {:?}", e)))
         }
     }
