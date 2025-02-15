@@ -33,13 +33,13 @@ impl std::error::Error for FlatError {}
 /// - Vectors are stored flat in a Vec<f64> (each vector occupies `dim` consecutive values).
 /// - A parallel Vec<bool> tracks tombstones.
 /// - A metric function is stored to compute distances.
-/// - Optionally, a schema (a Vec of byte slices) and metadata are provided.
+/// - Optionally, a schema (a Vec<String>) and metadata are provided.
 pub struct Flat {
     pub dim: usize,
     pub vectors: Vec<f64>,
     pub tombstones: Vec<bool>,
     pub metric: fn(&[f64], &[f64]) -> f64,
-    pub schema: Option<Vec<&'static [u8]>>,
+    pub schema: Option<Vec<String>>,
     pub metadata: Vec<Metadata>,
 }
 
@@ -47,7 +47,7 @@ impl Flat {
     /// Creates a new Flat index.
     /// The optional `metric` selects a distance function (default: Euclidean).
     /// The optional `schema` can be provided if you wish to attach metadata.
-    pub fn new(dim: usize, metric: Option<Metric>, schema: Option<Vec<&'static [u8]>>) -> Self {
+    pub fn new(dim: usize, metric: Option<Metric>, schema: Option<Vec<String>>) -> Self {
         let metric_fn = match metric {
             Some(Metric::Cosine) => Flat::cosine_similarity,
             Some(Metric::InnerProduct) => Flat::dot_product,
@@ -98,7 +98,7 @@ impl Flat {
 
         while let Some(Reverse(candidate)) = heap.pop() {
             if let Some(filter) = filter {
-                let attr_index = self.attribute_index(filter.attribute.as_bytes())?;
+                let attr_index = self.attribute_index(&filter.attribute)?;
                 if meta_count == 0 {
                     return Err(FlatError::EmptySchema);
                 }
@@ -125,11 +125,11 @@ impl Flat {
 
     /// Inserts a new vector into the index.
     /// The provided `vector` must have length equal to `dim`.
-    /// Optionally, a Vec of Metadata (one per attribute in the schema) may be provided.
+    /// Optionally, a slice of Metadata (one per attribute in the schema) may be provided.
     pub fn insert(
         &mut self,
         vector: &[f64],
-        metadata: Option<&Vec<Metadata>>,
+        metadata: Option<&[Metadata]>,
     ) -> Result<(), FlatError> {
         if vector.len() != self.dim {
             panic!(
@@ -147,11 +147,11 @@ impl Flat {
     }
 
     /// Builds the index from a set of vectors.
-    /// If metadata is provided, there must be one Vec<Metadata> per vector.
+    /// If metadata is provided, there must be one slice of Metadata per vector.
     pub fn create(
         &mut self,
-        vectors: Vec<&[f64]>,
-        metadata: Option<Vec<Vec<Metadata>>>,
+        vectors: &[&[f64]],
+        metadata: Option<&[&[Metadata]]>,
     ) -> Result<(), FlatError> {
         if vectors.is_empty() {
             return Err(FlatError::EmptyVectors);
@@ -160,12 +160,12 @@ impl Flat {
             if meta_list.len() != vectors.len() {
                 return Err(FlatError::MetadataMismatch);
             }
-            for (vec, meta) in vectors.into_iter().zip(meta_list.into_iter()) {
-                self.insert(vec, Some(&meta))?;
+            for (&vec, &meta) in vectors.iter().zip(meta_list.iter()) {
+                self.insert(vec, Some(meta))?;
             }
             return Ok(());
         }
-        for vec in vectors {
+        for &vec in vectors {
             self.insert(vec, None)?;
         }
         Ok(())
@@ -204,9 +204,6 @@ impl Flat {
                     let src_range = i * self.dim..(i + 1) * self.dim;
                     let dst_start = write_index * self.dim;
                     self.vectors.copy_within(src_range, dst_start);
-                    // for (j, &val) in self.vectors[src_range].iter().enumerate() {
-                    //     self.vectors[dst_start + j] = val;
-                    // }
                     self.tombstones[write_index] = false;
                     if self.schema.is_some() && meta_count > 0 {
                         let src_start = i * meta_count;
@@ -227,14 +224,14 @@ impl Flat {
         Ok(())
     }
 
-    /// Returns the index of the given attribute (provided as a byte slice) within the schema.
-    pub fn attribute_index(&self, name: &[u8]) -> Result<usize, FlatError> {
+    /// Returns the index of the given attribute (provided as a string) within the schema.
+    pub fn attribute_index(&self, name: &str) -> Result<usize, FlatError> {
         let schema = self.schema.as_ref().ok_or(FlatError::NoSchema)?;
         if schema.is_empty() {
             return Err(FlatError::EmptySchema);
         }
         for (i, attr) in schema.iter().enumerate() {
-            if *attr == name {
+            if attr == name {
                 return Ok(i);
             }
         }
@@ -400,15 +397,19 @@ mod tests {
     #[test]
     fn test_flat_metadata_and_filter() {
         // Create a schema with one attribute: "color".
-        let schema = vec![b"color".as_ref()];
+        let schema = vec!["color".to_string()];
         let mut index = Flat::new(2, Some(Metric::Cosine), Some(schema));
         {
             let meta_blue = vec![Metadata::Str("blue".to_string())];
-            index.insert(&[0.0, 0.0], Some(&meta_blue)).unwrap();
+            index
+                .insert(&[0.0, 0.0], Some(meta_blue.as_slice()))
+                .unwrap();
         }
         {
             let meta_red = vec![Metadata::Str("red".to_string())];
-            index.insert(&[10.0, 10.0], Some(&meta_red)).unwrap();
+            index
+                .insert(&[10.0, 10.0], Some(meta_red.as_slice()))
+                .unwrap();
         }
         let blue_filter = color_filter("blue");
         let results = index
@@ -440,11 +441,11 @@ mod tests {
     #[test]
     fn test_flat_attribute_not_found() {
         // Suppose our schema only has "color".
-        let schema = vec![b"color".as_ref()];
+        let schema = vec!["color".to_string()];
         let mut index = Flat::new(2, Some(Metric::L2), Some(schema));
         {
             let meta = vec![Metadata::Str("blue".to_string())];
-            index.insert(&[5.0, 5.0], Some(&meta)).unwrap();
+            index.insert(&[5.0, 5.0], Some(meta.as_slice())).unwrap();
         }
         // Define a filter for a non-existent attribute "category".
         let missing_attr_filter = Filter {
@@ -522,9 +523,10 @@ impl PyFlat {
 
     /// Create an index from a list of vectors.
     pub fn create(&mut self, vectors: Vec<Vec<f64>>) -> PyResult<()> {
+        // Build a slice of vector slices.
         let vecs: Vec<&[f64]> = vectors.iter().map(|v| v.as_slice()).collect();
         self.inner
-            .create(vecs, None)
+            .create(vecs.as_slice(), None)
             .map_err(|e| PyValueError::new_err(format!("Create error: {:?}", e)))
     }
 }
