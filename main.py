@@ -37,6 +37,9 @@ for i in range(num_inserts):
     chroma_insert_times.append(elapsed)
     print(f"[Chroma] Inserted vector {i+1}/{num_inserts} in {elapsed:.4f} seconds.")
 
+total_chroma_insert = sum(chroma_insert_times)
+print(f"\n[Chroma] Total insertion time for {num_inserts} vectors: {total_chroma_insert:.4f} seconds.")
+
 # --- Query Timing for Chroma ---
 chroma_query_times = []
 print("\nChroma: Running search queries with metadata filtering:")
@@ -57,13 +60,16 @@ for i in range(num_queries):
     result_count = len(results.get("ids", [[]])[0])
     print(f"[Chroma] Query {i+1}/{num_queries} (where category = '{filter_category}') took {elapsed:.4f} seconds, returned {result_count} results.")
 
+total_chroma_query = sum(chroma_query_times)
+print(f"\n[Chroma] Total query time for {num_queries} queries: {total_chroma_query:.4f} seconds.")
+
 # ------------------------------
 # NilVec Test
 # ------------------------------
 
 # Create an instance of PyHNSW with the given schema.
 # Constructor: PyHNSW(dim, layers, m, ef_construction, ef_search, metric, schema)
-hnsw = nilvec.PyHNSW(dim, None, None, None, None, None, ["category"])
+hnsw = nilvec.PyHNSW(dim, None, None, None, None, "inner_product", ["category"])
 
 # --- Insertion Timing for NilVec ---
 nilvec_insert_times = []
@@ -77,6 +83,9 @@ for i in range(num_inserts):
     elapsed = time.perf_counter() - start_time
     nilvec_insert_times.append(elapsed)
     print(f"[NilVec] Inserted vector {i+1}/{num_inserts} in {elapsed:.4f} seconds.")
+
+total_nilvec_insert = sum(nilvec_insert_times)
+print(f"\n[NilVec] Total insertion time for {num_inserts} vectors: {total_nilvec_insert:.4f} seconds.")
 
 # --- Query Timing for NilVec with metadata filtering ---
 nilvec_query_times = []
@@ -92,6 +101,9 @@ for i in range(num_queries):
     elapsed = time.perf_counter() - start_time
     nilvec_query_times.append(elapsed)
     print(f"[NilVec] Query {i+1}/{num_queries} (where category = '{filter_category}') took {elapsed:.4f} seconds, returned {len(results)} results.")
+
+total_nilvec_query = sum(nilvec_query_times)
+print(f"\n[NilVec] Total query time for {num_queries} queries: {total_nilvec_query:.4f} seconds.")
 
 # ------------------------------
 # Performance Improvement Calculation

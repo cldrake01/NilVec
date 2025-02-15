@@ -532,8 +532,7 @@ mod tests {
         ];
 
         for pt in points {
-            let vec = pt.to_vec();
-            hnsw.insert(&vec, None, None, &mut rng).unwrap();
+            hnsw.insert(pt, None, None, &mut rng).unwrap();
         }
         assert_eq!(hnsw.vectors.len() / hnsw.dim, 5);
 
@@ -558,8 +557,7 @@ mod tests {
         ];
 
         for pt in points {
-            let vec = pt.to_vec();
-            hnsw.insert(&vec, None, None, &mut rng).unwrap();
+            hnsw.insert(pt, None, None, &mut rng).unwrap();
         }
         assert_eq!(hnsw.vectors.len() / hnsw.dim, 3);
 
@@ -584,8 +582,7 @@ mod tests {
         let points: &[[f64; 2]] = &[[2.0, 2.0], [-2.0, 2.0], [-2.0, -2.0], [2.0, -2.0]];
 
         for pt in points {
-            let vec = pt.to_vec();
-            hnsw.insert(&vec, None, None, &mut rng).unwrap();
+            hnsw.insert(pt, None, None, &mut rng).unwrap();
         }
         assert_eq!(hnsw.vectors.len() / hnsw.dim, 4);
 
@@ -616,8 +613,7 @@ mod tests {
         ];
 
         for pt in points {
-            let vec = pt.to_vec();
-            hnsw.insert(&vec, None, None, &mut rng).unwrap();
+            hnsw.insert(pt, None, None, &mut rng).unwrap();
         }
         assert_eq!(hnsw.vectors.len() / hnsw.dim, 3);
 
