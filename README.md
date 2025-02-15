@@ -39,7 +39,7 @@ Below is an excerpt from our benchmark script:
 import time
 import random
 import numpy as np
-import nilvec  # Our PyO3 module exposing PyHNSW
+import nilvec
 import chromadb
 
 # Configuration
