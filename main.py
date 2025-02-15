@@ -39,7 +39,7 @@ for i in range(num_inserts):
 
 total_chroma_insert = sum(chroma_insert_times)
 print(
-    f"\n[Chroma] Total insertion time for {num_inserts} vectors: {total_chroma_insert:.4f} seconds."
+    f"\n[Chroma] Total insertion time for {num_inserts} vectors: {total_chroma_insert:.6f} seconds."
 )
 
 # --- Query Timing for Chroma ---
@@ -64,7 +64,7 @@ for i in range(num_queries):
 
 total_chroma_query = sum(chroma_query_times)
 print(
-    f"\n[Chroma] Total query time for {num_queries} queries: {total_chroma_query:.4f} seconds."
+    f"\n[Chroma] Total query time for {num_queries} queries: {total_chroma_query:.6f} seconds."
 )
 
 # ------------------------------
@@ -90,7 +90,7 @@ for i in range(num_inserts):
 
 total_nilvec_insert = sum(nilvec_insert_times)
 print(
-    f"\n[NilVec] Total insertion time for {num_inserts} vectors: {total_nilvec_insert:.4f} seconds."
+    f"\n[NilVec] Total insertion time for {num_inserts} vectors: {total_nilvec_insert:.6f} seconds."
 )
 
 # --- Query Timing for NilVec with metadata filtering ---
@@ -112,7 +112,7 @@ for i in range(num_queries):
 
 total_nilvec_query = sum(nilvec_query_times)
 print(
-    f"\n[NilVec] Total query time for {num_queries} queries: {total_nilvec_query:.4f} seconds."
+    f"\n[NilVec] Total query time for {num_queries} queries: {total_nilvec_query:.6f} seconds."
 )
 
 # ------------------------------
