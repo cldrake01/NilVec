@@ -14,9 +14,9 @@ client = chromadb.Client()
 collection = client.create_collection(name="test_collection")
 
 # Configuration
-dim = 10             # Dimension of each vector
-num_inserts = 100    # Number of vectors to insert
-num_queries = 10     # Number of search queries to time
+dim = 10  # Dimension of each vector
+num_inserts = 100  # Number of vectors to insert
+num_queries = 10  # Number of search queries to time
 categories = ["news", "blog", "report"]
 
 # --- Insertion Timing for Chroma ---
@@ -31,14 +31,16 @@ for i in range(num_inserts):
         ids=[str(i)],
         embeddings=[vector],
         metadatas=[metadata],
-        documents=[""]  # Documents are optional; here we use an empty string.
+        documents=[""],  # Documents are optional; here we use an empty string.
     )
     elapsed = time.perf_counter() - start_time
     chroma_insert_times.append(elapsed)
     print(f"[Chroma] Inserted vector {i+1}/{num_inserts} in {elapsed:.4f} seconds.")
 
 total_chroma_insert = sum(chroma_insert_times)
-print(f"\n[Chroma] Total insertion time for {num_inserts} vectors: {total_chroma_insert:.4f} seconds.")
+print(
+    f"\n[Chroma] Total insertion time for {num_inserts} vectors: {total_chroma_insert:.4f} seconds."
+)
 
 # --- Query Timing for Chroma ---
 chroma_query_times = []
@@ -50,18 +52,20 @@ for i in range(num_queries):
 
     start_time = time.perf_counter()
     results = collection.query(
-        query_embeddings=[query],
-        n_results=5,
-        where={"category": filter_category}
+        query_embeddings=[query], n_results=5, where={"category": filter_category}
     )
     elapsed = time.perf_counter() - start_time
     chroma_query_times.append(elapsed)
 
     result_count = len(results.get("ids", [[]])[0])
-    print(f"[Chroma] Query {i+1}/{num_queries} (where category = '{filter_category}') took {elapsed:.4f} seconds, returned {result_count} results.")
+    print(
+        f"[Chroma] Query {i+1}/{num_queries} (where category = '{filter_category}') took {elapsed:.4f} seconds, returned {result_count} results."
+    )
 
 total_chroma_query = sum(chroma_query_times)
-print(f"\n[Chroma] Total query time for {num_queries} queries: {total_chroma_query:.4f} seconds.")
+print(
+    f"\n[Chroma] Total query time for {num_queries} queries: {total_chroma_query:.4f} seconds."
+)
 
 # ------------------------------
 # NilVec Test
@@ -85,7 +89,9 @@ for i in range(num_inserts):
     print(f"[NilVec] Inserted vector {i+1}/{num_inserts} in {elapsed:.4f} seconds.")
 
 total_nilvec_insert = sum(nilvec_insert_times)
-print(f"\n[NilVec] Total insertion time for {num_inserts} vectors: {total_nilvec_insert:.4f} seconds.")
+print(
+    f"\n[NilVec] Total insertion time for {num_inserts} vectors: {total_nilvec_insert:.4f} seconds."
+)
 
 # --- Query Timing for NilVec with metadata filtering ---
 nilvec_query_times = []
@@ -100,10 +106,14 @@ for i in range(num_queries):
     results = hnsw.search(query, 5, ("category", filter_category))
     elapsed = time.perf_counter() - start_time
     nilvec_query_times.append(elapsed)
-    print(f"[NilVec] Query {i+1}/{num_queries} (where category = '{filter_category}') took {elapsed:.4f} seconds, returned {len(results)} results.")
+    print(
+        f"[NilVec] Query {i+1}/{num_queries} (where category = '{filter_category}') took {elapsed:.4f} seconds, returned {len(results)} results."
+    )
 
 total_nilvec_query = sum(nilvec_query_times)
-print(f"\n[NilVec] Total query time for {num_queries} queries: {total_nilvec_query:.4f} seconds.")
+print(
+    f"\n[NilVec] Total query time for {num_queries} queries: {total_nilvec_query:.4f} seconds."
+)
 
 # ------------------------------
 # Performance Improvement Calculation
@@ -129,7 +139,9 @@ print(f"Average Query Time (Chroma):     {avg_chroma_query:.4f} seconds")
 print(f"Average Query Time (NilVec):       {avg_nilvec_query:.4f} seconds")
 print(f"Query Improvement:               {query_improvement:.2f}%")
 
-print(f"\nOverall Average Performance Improvement for NilVec relative to Chroma: {overall_improvement:.2f}%")
+print(
+    f"\nOverall Average Performance Improvement for NilVec relative to Chroma: {overall_improvement:.2f}%"
+)
 
 # ------------------------------
 # Combined Plotting & Saving
@@ -143,19 +155,27 @@ x_queries = np.arange(1, num_queries + 1)
 
 # --- Insertion Times Plot ---
 # Scatter plots with slight transparency and no connecting lines.
-ax1.scatter(x_inserts, chroma_insert_times, marker='o', alpha=0.7, label='Chroma Points')
-ax1.scatter(x_inserts, nilvec_insert_times, marker='s', alpha=0.7, label='NilVec Points')
+ax1.scatter(
+    x_inserts, chroma_insert_times, marker="o", alpha=0.7, label="Chroma Points"
+)
+ax1.scatter(
+    x_inserts, nilvec_insert_times, marker="s", alpha=0.7, label="NilVec Points"
+)
 
 # Compute and plot best-fit lines.
 # For Chroma:
 coeffs = np.polyfit(x_inserts, chroma_insert_times, 1)
 poly = np.poly1d(coeffs)
-ax1.plot(x_inserts, poly(x_inserts), linestyle='--', color='blue', label='Chroma Best Fit')
+ax1.plot(
+    x_inserts, poly(x_inserts), linestyle="--", color="blue", label="Chroma Best Fit"
+)
 
 # For NilVec:
 coeffs = np.polyfit(x_inserts, nilvec_insert_times, 1)
 poly = np.poly1d(coeffs)
-ax1.plot(x_inserts, poly(x_inserts), linestyle='--', color='orange', label='NilVec Best Fit')
+ax1.plot(
+    x_inserts, poly(x_inserts), linestyle="--", color="orange", label="NilVec Best Fit"
+)
 
 ax1.set_title("Insertion Times Comparison")
 ax1.set_xlabel("Insert Operation")
@@ -164,19 +184,23 @@ ax1.legend()
 
 # --- Query Times Plot ---
 # Scatter plots with slight transparency.
-ax2.scatter(x_queries, chroma_query_times, marker='o', alpha=0.7, label='Chroma Points')
-ax2.scatter(x_queries, nilvec_query_times, marker='s', alpha=0.7, label='NilVec Points')
+ax2.scatter(x_queries, chroma_query_times, marker="o", alpha=0.7, label="Chroma Points")
+ax2.scatter(x_queries, nilvec_query_times, marker="s", alpha=0.7, label="NilVec Points")
 
 # Compute and plot best-fit lines.
 # For Chroma:
 coeffs = np.polyfit(x_queries, chroma_query_times, 1)
 poly = np.poly1d(coeffs)
-ax2.plot(x_queries, poly(x_queries), linestyle='--', color='blue', label='Chroma Best Fit')
+ax2.plot(
+    x_queries, poly(x_queries), linestyle="--", color="blue", label="Chroma Best Fit"
+)
 
 # For NilVec:
 coeffs = np.polyfit(x_queries, nilvec_query_times, 1)
 poly = np.poly1d(coeffs)
-ax2.plot(x_queries, poly(x_queries), linestyle='--', color='orange', label='NilVec Best Fit')
+ax2.plot(
+    x_queries, poly(x_queries), linestyle="--", color="orange", label="NilVec Best Fit"
+)
 
 ax2.set_title("Query Times Comparison")
 ax2.set_xlabel("Query Operation")
