@@ -1,5 +1,3 @@
-# NilVec
-
 ![NilVec Logo](NilVec.png)
 
 ## Overview
@@ -116,7 +114,7 @@ vectors = [
 index.create(vectors)
 ```
 
-# Testing
+## Testing
 
 To run the NilVec test suite, execute:
 
