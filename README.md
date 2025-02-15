@@ -69,8 +69,6 @@ for i in range(num_queries):
     elapsed = time.perf_counter() - start_time
     nilvec_query_times.append(elapsed)
 
-# (Detailed timing data and average improvements omitted for brevity.)
-print("Overall query latency improvement: 95.5%")
 ```
 
 ## Usage
