@@ -1,14 +1,15 @@
-use ordered_float::OrderedFloat;
-use pyo3::exceptions::PyValueError;
-use pyo3::prelude::*;
-use std::cmp::Reverse;
-use std::collections::BinaryHeap;
-use std::sync::Arc;
-
 use crate::candidate::Candidate;
 use crate::filter::Filter;
 use crate::metadata::Metadata;
 use crate::metric::Metric;
+use ordered_float::OrderedFloat;
+use pyo3::exceptions::PyValueError;
+use pyo3::prelude::*;
+use rayon::prelude::*;
+use std::cmp::Reverse;
+use std::collections::BinaryHeap;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 /// Errors for Flat index operations.
 #[derive(Debug)]
@@ -41,6 +42,7 @@ pub struct Flat {
     pub metric: fn(&[f64], &[f64]) -> f64,
     pub schema: Option<Vec<String>>,
     pub metadata: Vec<Metadata>,
+    pub version: AtomicUsize,
 }
 
 impl Flat {
@@ -60,6 +62,7 @@ impl Flat {
             metric: metric_fn,
             schema,
             metadata: Vec::new(),
+            version: AtomicUsize::new(0),
         }
     }
 
@@ -72,22 +75,28 @@ impl Flat {
         filter: Option<&Filter>,
     ) -> Result<Vec<Candidate>, FlatError> {
         let k_ = k.unwrap_or(1);
-        let mut heap = BinaryHeap::new();
-
-        if self.vectors.is_empty() {
+        let num_vectors = self.vectors.len() / self.dim;
+        if num_vectors == 0 {
             return Err(FlatError::EmptyIndex);
         }
-        let num_vectors = self.vectors.len() / self.dim;
-        for i in 0..num_vectors {
-            let vector = &self.vectors[i * self.dim..(i + 1) * self.dim];
-            let d = (self.metric)(query, vector);
-            let candidate = Candidate {
-                distance: OrderedFloat(d),
-                id: i,
-            };
-            heap.push(Reverse(candidate));
-        }
 
+        // Compute all candidates in parallel.
+        let mut candidates: Vec<Candidate> = (0..num_vectors)
+            .into_par_iter()
+            .map(|i| {
+                let vector = &self.vectors[i * self.dim..(i + 1) * self.dim];
+                let d = (self.metric)(query, vector);
+                Candidate {
+                    distance: OrderedFloat(d),
+                    id: i,
+                }
+            })
+            .collect();
+
+        // Sort candidates by distance (lowest first).
+        candidates.sort_unstable_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap());
+
+        // Sequentially filter candidates with error handling.
         let mut count = 0;
         let mut results = Vec::new();
         let meta_count = if let Some(ref schema) = self.schema {
@@ -96,13 +105,13 @@ impl Flat {
             0
         };
 
-        while let Some(Reverse(candidate)) = heap.pop() {
+        let mut iter = candidates.into_iter();
+        while let Some(candidate) = iter.next() {
             if let Some(filter) = filter {
                 let attr_index = self.attribute_index(&filter.attribute)?;
                 if meta_count == 0 {
                     return Err(FlatError::EmptySchema);
                 }
-                // Assume each vector's metadata occupies a contiguous block of `meta_count` entries.
                 let meta_idx = candidate.id * meta_count + attr_index;
                 if meta_idx >= self.metadata.len() {
                     return Err(FlatError::AttributeNotFound);
@@ -140,6 +149,7 @@ impl Flat {
         }
         self.vectors.extend_from_slice(vector);
         self.tombstones.push(false);
+        // self.version.fetch_add(1, Ordering::Release);
         if let Some(meta) = metadata {
             self.metadata.extend_from_slice(meta);
         }
