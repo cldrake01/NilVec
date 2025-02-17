@@ -7,7 +7,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use rayon::prelude::*;
 use std::cmp::Reverse;
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashMap};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -64,6 +64,10 @@ impl Flat {
             metadata: Vec::new(),
             version: AtomicUsize::new(0),
         }
+    }
+
+    fn vector_from_id(&self, id: usize) -> Vec<f64> {
+        self.vectors[id * self.dim..(id + 1) * self.dim].to_vec()
     }
 
     /// Searches for the k nearest neighbors to `query` (a slice of f64 of length `dim`).
@@ -480,63 +484,184 @@ impl PyFlat {
     /// Parameters:
     /// - `dim`: dimension of each vector.
     /// - `metric`: an optional string ("l2", "cosine", "inner_product") defaulting to "l2".
+    /// - `schema`: an optional list of strings representing the schema of the vectors.
     #[new]
-    pub fn new(dim: usize, metric: Option<String>) -> PyResult<Self> {
+    pub fn new(dim: usize, metric: Option<String>, schema: Option<Vec<String>>) -> PyResult<Self> {
         let metric_enum = match metric.as_deref() {
             Some("cosine") => Some(Metric::Cosine),
             Some("inner_product") => Some(Metric::InnerProduct),
-            _ => Some(Metric::L2),
+            Some("l2") => Some(Metric::L2),
+            None => Some(Metric::L2),
+            _ => return Err(PyValueError::new_err("Unsupported metric.")),
         };
         Ok(PyFlat {
-            inner: Flat::new(dim, metric_enum, None),
+            inner: Flat::new(dim, metric_enum, schema),
         })
     }
 
     /// Insert a vector into the index.
     ///
     /// The vector is expected as a list of floats whose length equals the index dimension.
-    pub fn insert(&mut self, vector: Vec<f64>) -> PyResult<()> {
-        if vector.len() != self.inner.dim {
-            return Err(PyValueError::new_err(format!(
-                "Expected vector of length {}, got {}",
-                self.inner.dim,
-                vector.len()
-            )));
-        }
+    pub fn insert(
+        &mut self,
+        vector: Vec<f64>,
+        metadata: Option<Vec<(String, PyObject)>>,
+        py: Python,
+    ) -> PyResult<()> {
+        // If metadata is provided, convert each tuple into a Metadata value.
+        let meta_converted = if let Some(meta_tuples) = metadata {
+            // Ensure a schema was set when the index was created.
+            let schema = self.inner.schema.as_ref().ok_or_else(|| {
+                PyValueError::new_err("No schema provided in HNSW instance; cannot use metadata")
+            })?;
+            // Build a map from attribute name to PyObject.
+            let meta_map: HashMap<String, PyObject> = meta_tuples.into_iter().collect();
+            // Create a vector of Metadata in the order defined by the schema.
+            let mut meta_vec = Vec::with_capacity(schema.len());
+            for attr in schema {
+                if let Some(py_val) = meta_map.get(attr) {
+                    // Directly extract the value from the PyObject.
+                    let md = if let Ok(s) = py_val.extract::<String>(py) {
+                        Metadata::Str(s)
+                    } else if let Ok(i) = py_val.extract::<i64>(py) {
+                        Metadata::Int(i)
+                    } else if let Ok(f) = py_val.extract::<f64>(py) {
+                        Metadata::Float(f)
+                    } else {
+                        return Err(PyValueError::new_err(format!(
+                            "Unsupported metadata type for attribute '{}'",
+                            attr
+                        )));
+                    };
+                    meta_vec.push(md);
+                } else {
+                    return Err(PyValueError::new_err(format!(
+                        "Missing metadata for attribute '{}'",
+                        attr
+                    )));
+                }
+            }
+            Some(meta_vec)
+        } else {
+            None
+        };
+
         self.inner
-            .insert(&vector, None)
+            .insert(&vector, meta_converted.as_deref())
             .map_err(|e| PyValueError::new_err(format!("Insert error: {:?}", e)))
     }
 
     /// Search for the k nearest neighbors.
     ///
     /// Returns a list of tuples `(id, distance)`.
-    pub fn search(&self, query: Vec<f64>, k: Option<usize>) -> PyResult<Vec<(usize, f64)>> {
-        if query.len() != self.inner.dim {
-            return Err(PyValueError::new_err(format!(
-                "Expected query of length {}, got {}",
-                self.inner.dim,
-                query.len()
-            )));
-        }
+    #[pyo3(signature = (query, k=None, filter=None))]
+    pub fn search(
+        &self,
+        query: Vec<f64>,
+        k: Option<usize>,
+        filter: Option<(String, PyObject)>,
+        py: Python,
+    ) -> PyResult<Vec<(f64, Vec<f64>)>> {
         let k = k.unwrap_or(1);
-        self.inner
-            .search(&query, Some(k), None)
-            .map(|candidates| {
-                candidates
-                    .into_iter()
-                    .map(|c| (c.id, c.distance.into_inner()))
-                    .collect()
-            })
-            .map_err(|e| PyValueError::new_err(format!("Search error: {:?}", e)))
+        let candidates = if let Some((attribute, expected_value)) = filter {
+            // Ensure that a schema was set when the index was created.
+            if self.inner.schema.is_none() {
+                return Err(PyValueError::new_err(
+                    "No schema provided in Flat instance; cannot use metadata filtering",
+                ));
+            }
+            // Convert the expected value from Python into a Metadata value.
+            let expected_md = if let Ok(s) = expected_value.extract::<String>(py) {
+                Metadata::Str(s)
+            } else if let Ok(i) = expected_value.extract::<i64>(py) {
+                Metadata::Int(i)
+            } else if let Ok(f) = expected_value.extract::<f64>(py) {
+                Metadata::Float(f)
+            } else {
+                return Err(PyValueError::new_err(
+                    "Unsupported type for metadata filter",
+                ));
+            };
+
+            // Create a Filter that checks for equality.
+            let filter_obj = Filter {
+                attribute,
+                condition: Arc::new(move |meta: &Metadata| meta == &expected_md),
+            };
+            self.inner
+                .search(&query, Some(k), Some(&filter_obj))
+                .map_err(|e| PyValueError::new_err(format!("Search error: {:?}", e)))?
+        } else {
+            self.inner
+                .search(&query, Some(k), None)
+                .map_err(|e| PyValueError::new_err(format!("Search error: {:?}", e)))?
+        };
+
+        Ok(candidates
+            .into_iter()
+            .map(|c| (c.distance.into_inner(), self.inner.vector_from_id(c.id)))
+            .collect())
     }
 
     /// Create an index from a list of vectors.
-    pub fn create(&mut self, vectors: Vec<Vec<f64>>) -> PyResult<()> {
-        // Build a slice of vector slices.
+    pub fn create(
+        &mut self,
+        vectors: Vec<Vec<f64>>,
+        metadata: Option<Vec<Vec<(String, PyObject)>>>,
+        py: Python,
+    ) -> PyResult<()> {
+        // Convert vectors into slices.
         let vecs: Vec<&[f64]> = vectors.iter().map(|v| v.as_slice()).collect();
-        self.inner
-            .create(vecs.as_slice(), None)
-            .map_err(|e| PyValueError::new_err(format!("Create error: {:?}", e)))
+
+        if let Some(meta_lists) = metadata {
+            if meta_lists.len() != vectors.len() {
+                return Err(PyValueError::new_err(
+                    "Length of metadata list must match number of vectors",
+                ));
+            }
+            // Get the schema from the inner HNSW.
+            let schema = self.inner.schema.as_ref().ok_or_else(|| {
+                PyValueError::new_err("No schema provided in HNSW instance; cannot use metadata")
+            })?;
+            // In this block, build the owned metadata vectors.
+            let mut meta_vecs: Vec<Vec<Metadata>> = Vec::with_capacity(meta_lists.len());
+            for meta_tuples in meta_lists {
+                let meta_map: HashMap<String, PyObject> = meta_tuples.into_iter().collect();
+                let mut meta_vec: Vec<Metadata> = Vec::with_capacity(schema.len());
+                for attr in schema {
+                    if let Some(py_val) = meta_map.get(attr) {
+                        let md = if let Ok(s) = py_val.extract::<String>(py) {
+                            Metadata::Str(s)
+                        } else if let Ok(i) = py_val.extract::<i64>(py) {
+                            Metadata::Int(i)
+                        } else if let Ok(f) = py_val.extract::<f64>(py) {
+                            Metadata::Float(f)
+                        } else {
+                            return Err(PyValueError::new_err(format!(
+                                "Unsupported metadata type for attribute '{}'",
+                                attr
+                            )));
+                        };
+                        meta_vec.push(md);
+                    } else {
+                        return Err(PyValueError::new_err(format!(
+                            "Missing metadata for attribute '{}'",
+                            attr
+                        )));
+                    }
+                }
+                meta_vecs.push(meta_vec);
+            }
+            // Create a vector of references that borrow from meta_vecs.
+            let meta_refs: Vec<&[Metadata]> = meta_vecs.iter().map(|v| v.as_slice()).collect();
+            // Call inner.create while meta_vecs (and thus meta_refs) are still alive.
+            self.inner
+                .create(vecs.as_slice(), Some(meta_refs.as_slice()))
+                .map_err(|e| PyValueError::new_err(format!("Create error: {:?}", e)))
+        } else {
+            self.inner
+                .create(vecs.as_slice(), None)
+                .map_err(|e| PyValueError::new_err(format!("Create error: {:?}", e)))
+        }
     }
 }

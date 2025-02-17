@@ -1,14 +1,14 @@
-use ordered_float::OrderedFloat;
-use pyo3::exceptions::PyValueError;
-use pyo3::prelude::*;
-use rand::Rng;
-use std::collections::{BinaryHeap, HashMap, HashSet};
-use std::sync::Arc; // requires the rand crate
-
 use crate::candidate::Candidate;
 use crate::filter::Filter;
 use crate::metadata::Metadata;
 use crate::metric::Metric;
+use ordered_float::OrderedFloat;
+use pyo3::exceptions::PyValueError;
+use pyo3::prelude::*;
+use rand::Rng;
+use rayon::prelude::*;
+use std::collections::{BinaryHeap, HashMap, HashSet};
+use std::sync::Arc; // requires the rand crate
 
 /// Possible errors in HNSW operations.
 #[derive(Debug, Clone)]
@@ -96,7 +96,6 @@ impl HNSW {
         nns.insert(pos, item);
     }
 
-    /// Searches for the nearest neighbors (k‑NN) in a given layer.
     fn knn(
         &self,
         entry: usize,
@@ -129,14 +128,16 @@ impl HNSW {
         visited.insert(entry);
 
         let mut candidates = BinaryHeap::new();
-        // Wrap in Reverse so that BinaryHeap pops the smallest distance first.
         candidates.push(std::cmp::Reverse(best));
 
+        // Instead of a plain for loop over the neighbor indices, use a parallel iterator.
         while let Some(std::cmp::Reverse(candidate)) = candidates.pop() {
+            // Early exit if the current candidate's distance is greater than the worst in our result set.
             if candidate.distance > nns.last().unwrap().distance {
                 break;
             }
 
+            // Determine the neighbor list bounds.
             let start = self.offsets.get(candidate.id).copied().unwrap_or(0);
             let end = if candidate.id + 1 < self.offsets.len() {
                 self.offsets[candidate.id + 1]
@@ -144,35 +145,45 @@ impl HNSW {
                 self.connections.len()
             };
 
-            for i in start..end {
-                let neighbor = self.connections[i];
-                if self.levels[neighbor] < layer {
-                    continue;
-                }
-                // If a filter is provided, check it.
-                if let Some(filter) = filter {
-                    let attr_index = self.attribute_index(&filter.attribute)?;
-                    // Here we assume that the metadata for a node is stored at position `neighbor + attr_index`
-                    // (adjust as needed for your layout).
-                    let meta = &self.metadata[neighbor + attr_index];
-                    if !(filter.condition)(meta) {
-                        continue;
+            // Compute distances to all neighbors in parallel.
+            let neighbor_candidates: Vec<Candidate> = (start..end)
+                .into_par_iter()
+                .filter_map(|i| {
+                    let neighbor = self.connections[i];
+                    if self.levels[neighbor] < layer {
+                        return None;
                     }
-                }
-                let neighbor_vector = &self.vectors[neighbor * self.dim..(neighbor + 1) * self.dim];
-                let distance = (self.metric)(query, neighbor_vector);
-                let current = Candidate {
-                    distance: OrderedFloat(distance),
-                    id: neighbor,
-                };
+                    // If a filter is provided, we need to check it.
+                    if let Some(filter) = filter {
+                        let attr_index = self.attribute_index(&filter.attribute).ok()?;
+                        // Assume metadata for the neighbor is at position neighbor + attr_index.
+                        if neighbor + attr_index >= self.metadata.len() {
+                            return None;
+                        }
+                        let meta = &self.metadata[neighbor + attr_index];
+                        if !(filter.condition)(meta) {
+                            return None;
+                        }
+                    }
+                    let neighbor_vector =
+                        &self.vectors[neighbor * self.dim..(neighbor + 1) * self.dim];
+                    let distance = (self.metric)(query, neighbor_vector);
+                    Some(Candidate {
+                        distance: OrderedFloat(distance),
+                        id: neighbor,
+                    })
+                })
+                .collect();
 
+            // Process the computed candidates sequentially to preserve error handling.
+            for current in neighbor_candidates {
                 if !visited.contains(&current.id) {
                     visited.insert(current.id);
-                    if nns.len() < ef || distance < *nns.last().unwrap().distance {
+                    if nns.len() < ef || current.distance < nns.last().unwrap().distance {
                         candidates.push(std::cmp::Reverse(current.clone()));
                         Self::insort(&mut nns, current);
                         if nns.len() > ef {
-                            nns.pop(); // remove the worst candidate
+                            nns.pop();
                         }
                     }
                 }
@@ -824,8 +835,8 @@ impl PyHNSW {
             Some("angular") => Some(Metric::Cosine),
             Some("inner_product") => Some(Metric::InnerProduct),
             Some("euclidean") => Some(Metric::L2),
-            // Throws an error if the metric is not recognized.
-            _ => return Err(PyValueError::new_err("Unsupported metric")),
+            None => Some(Metric::L2),
+            _ => return Err(PyValueError::new_err("Unsupported metric.")),
         };
         Ok(PyHNSW {
             inner: HNSW::new(
@@ -901,10 +912,10 @@ impl PyHNSW {
     #[pyo3(signature = (query, k=None, filter=None))]
     pub fn search(
         &self,
-        py: Python,
         query: Vec<f64>,
         k: Option<usize>,
         filter: Option<(String, PyObject)>,
+        py: Python,
     ) -> PyResult<Vec<(f64, Vec<f64>)>> {
         let k = k.unwrap_or(1);
         let candidates = if let Some((attribute, expected_value)) = filter {
@@ -955,7 +966,7 @@ impl PyHNSW {
     ) -> PyResult<()> {
         // Convert vectors into slices.
         let vecs: Vec<&[f64]> = vectors.iter().map(|v| v.as_slice()).collect();
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         if let Some(meta_lists) = metadata {
             if meta_lists.len() != vectors.len() {

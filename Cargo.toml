@@ -1,20 +1,11 @@
 [package]
 name = "nilvec"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2021"
 description = "A library for approximate nearest neighbor search written in Rust."
 license = "MIT"
 repository = "https://github.com/cldrake01/NilVec"
 documentation = ""
-auhtors = [{ name = "Collin Drake", email = "collinlindendrake@gmail.com" }]
-maintainers = [{ name = "Collin Drake", email = "collinlindendrake@gmail.com" }]
-requires-python = ">=3.8"
-classifiers = [
-    "Programming Language :: Rust",
-    "Programming Language :: Python :: Implementation :: CPython",
-    "Programming Language :: Python :: Implementation :: PyPy",
-]
-dynamic = ["version"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
