@@ -11,7 +11,7 @@ Recent benchmarks demonstrate that NilVec outperforms leading vector databases, 
 - **Optimized Memory Utilization:** Vectors are stored contiguously, and metadata is managed separately, preventing unnecessary memory bloat.
 - **High-Speed Query Execution:** Benchmarked for superior query latency, outperforming Chroma, Qdrant, and Milvus in real-world workloads.
 - **Flexible API:** Rust-powered backend with a Python interface, offering efficient insertion, bulk indexing, and metadata-aware filtering.
-- **Multi-Backend Benchmarking:** Directly compared against Qdrant, Chroma, Milvus, Redis, and PyHNSW with real-time performance tracking.
+- **Multi-Backend Benchmarking:** Directly compared against Qdrant, Chroma, Milvus, and Redis with real-time performance tracking.
 
 ## Benchmarks
 
@@ -22,16 +22,9 @@ NilVec has been benchmarked against multiple vector databases:
 - **Milvus**: Open-source vector database designed for massive-scale search.
 - **Redis**: Real-time vector similarity search with Redis AI.
 
-### Configuration
-
-- **Vector Dimension:** 128
-- **Number of Insertions:** 10,000 vectors
-- **Query Interval:** Every 100 insertions
-- **Metadata Filtering:** Applied across different categories (`news`, `blog`, `report`)
-
 ### Results
 
-- **Query Latency:** NilVec consistently delivers lower latency compared to Qdrant, Chroma, and Milvus.
+- **Query Latency:** NilVec consistently delivers lower latency compared to Qdrant, Chroma, Milvus, and Redis.
 - **Insertion Efficiency:** Handles bulk insertions with minimal overhead, maintaining stable performance as the dataset scales.
 - **Scalability:** Performance remains stable even as the index grows, showcasing NilVec's robustness in large-scale deployments.
 
