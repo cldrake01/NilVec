@@ -2,134 +2,105 @@
 
 ## Overview
 
-NilVec is a high-performance, memory-efficient vector search library designed to handle both embeddings and associated metadata without compromising query accuracy or speed. By decoupling metadata from the core embedding data during distance calculations, NilVec ensures that search accuracy remains high while keeping memory overhead minimal.
+NilVec is a high-performance, memory-efficient vector search library designed for large-scale, real-time applications. It decouples metadata from core embeddings during distance calculations, ensuring minimal memory overhead while maintaining high search accuracy and speed.
 
-In our benchmarks, NilVec achieved a **95.5% improvement on query latency** compared to leading solutions like Chroma, making it an excellent choice for real-time applications and large-scale search deployments.
+Recent benchmarks demonstrate that NilVec outperforms leading vector databases, including Chroma, Qdrant, and Milvus, offering substantial improvements in query latency and insertion efficiency.
 
 ## Key Features
 
-- **Memory Efficiency:**
-  NilVec stores vectors in a contiguous block of memory and tracks metadata separately, avoiding unnecessary duplication and overhead.
-
-- **High Performance:**
-  Benchmarked to deliver a 95.5% improvement in query latency over comparable systems, ensuring rapid search responses.
-
-- **Flexible and Ergonomic API:**
-  Built in Rust with a Python interface, NilVec supports simple operations for inserting vectors, searching, and bulk index creation—all while handling metadata seamlessly.
-
-## How It Works
-
-NilVec separates the embedding components from metadata so that only the core vector elements contribute to distance calculations. Metadata is stored in parallel and associated via a schema that maps attribute names (as `String`s) to their corresponding positions in the metadata array. This design guarantees that metadata does not interfere with the accuracy of nearest neighbor searches.
+- **Optimized Memory Utilization:** Vectors are stored contiguously, and metadata is managed separately, preventing unnecessary memory bloat.
+- **High-Speed Query Execution:** Benchmarked for superior query latency, outperforming Chroma, Qdrant, and Milvus in real-world workloads.
+- **Flexible API:** Rust-powered backend with a Python interface, offering efficient insertion, bulk indexing, and metadata-aware filtering.
+- **Multi-Backend Benchmarking:** Directly compared against Qdrant, Chroma, Milvus, Redis, and PyHNSW with real-time performance tracking.
 
 ## Benchmarks
 
-Our benchmarks compare NilVec with Chroma using the following setup:
+NilVec has been benchmarked against multiple vector databases:
 
-- **Configuration:**
-  - Dimension: 10
-  - Number of insertions: 100 vectors
-  - Number of queries: 10 queries with metadata filtering
-- **Results:**
-  - NilVec demonstrated a **95.5% improvement on query latency** compared to Chroma.
-  - Insertion latency is also highly optimized, ensuring minimal overhead during data ingestion.
+- **Chroma**: Lightweight embedding database optimized for LLM applications.
+- **Qdrant**: High-performance vector search engine for production environments.
+- **Milvus**: Open-source vector database designed for massive-scale search.
+- **Redis**: Real-time vector similarity search with Redis AI.
 
-Below is an excerpt from our benchmark script:
+### Configuration
+
+- **Vector Dimension:** 128
+- **Number of Insertions:** 10,000 vectors
+- **Query Interval:** Every 100 insertions
+- **Metadata Filtering:** Applied across different categories (`news`, `blog`, `report`)
+
+### Results
+
+- **Query Latency:** NilVec consistently delivers lower latency compared to Qdrant, Chroma, and Milvus.
+- **Insertion Efficiency:** Handles bulk insertions with minimal overhead, maintaining stable performance as the dataset scales.
+- **Scalability:** Performance remains stable even as the index grows, showcasing NilVec's robustness in large-scale deployments.
+
+### Sample Benchmark Code
 
 ```python
 import time
 import random
 import numpy as np
 import nilvec
-import chromadb
 
 # Configuration
-dim = 10
-num_inserts = 100
-num_queries = 10
-categories = ["news", "blog", "report"]
+DIM = 128
+NUM_INSERTS = 10_000
+QUERY_INTERVAL = 100
+CATEGORIES = ["news", "blog", "report"]
 
-# --- Chroma Benchmark ---
-chroma_query_times = []
-for i in range(num_queries):
-    query = [random.random() for _ in range(dim)]
-    filter_category = random.choice(categories)
-    start_time = time.perf_counter()
-    # Execute query on Chroma...
-    elapsed = time.perf_counter() - start_time
-    chroma_query_times.append(elapsed)
+index = nilvec.PyHNSW(DIM, None, None, None, None, "inner_product", ["category"])
 
-# --- NilVec Benchmark ---
-nilvec_query_times = []
-hnsw = nilvec.PyHNSW(dim, None, None, None, None, "inner_product", ["category"])
-for i in range(num_queries):
-    query = [random.random() for _ in range(dim)]
-    filter_category = random.choice(categories)
-    start_time = time.perf_counter()
-    results = hnsw.search(query, 5, ("category", filter_category))
-    elapsed = time.perf_counter() - start_time
-    nilvec_query_times.append(elapsed)
+for i in range(NUM_INSERTS):
+    vector = [random.random() for _ in range(DIM)]
+    metadata = {"category": random.choice(CATEGORIES)}
+    index.insert(vector, metadata)
 
+    if (i + 1) % QUERY_INTERVAL == 0:
+        query = [random.random() for _ in range(DIM)]
+        results = index.search(query, 5, ("category", metadata["category"]))
+        print(f"Query {i + 1}: {results}")
 ```
 
-## Usage
+## Installation
 
-### Installation
-
-NilVec is distributed as a Python package via its PyO3 bindings. You can install it using pip:
+NilVec can be installed via pip:
 
 ```bash
 pip install nilvec
 ```
 
-To build NilVec from source, follow these steps:
+To build from source:
 
-1. Clone the repository:
+```bash
+git clone https://github.com/cldrake01/nilvec.git
+cd nilvec
+maturin develop --release
+```
 
-   ```bash
-   git clone https://github.com/cldrake01/nilvec.git
-   cd nilvec
-   ```
+## Usage
 
-2. Build the project:
-
-   ```bash
-   matruin develop --release
-   ```
-
-### Examples
-
-Below is a quick example of how to use NilVec in your Python project:
-
-```py
+```python
 import nilvec
 
-# Create an index with dimension 128 using inner product as the metric.
-# Optionally, you can provide a schema for metadata.
+# Create an index with metadata-aware filtering
 index = nilvec.PyHNSW(128, None, None, None, None, "inner_product", ["color", "size"])
 
-# Insert a vector with associated metadata.
+# Insert vectors with metadata
 vector = [0.1] * 128
 metadata = [("color", "blue"), ("size", 42)]
 index.insert(vector, metadata)
 
-# Perform a search query with metadata filtering.
+# Perform a metadata-aware search
 query = [0.1] * 128
 results = index.search(query, k=5, filter=("color", "blue"))
 for distance, vector in results:
     print("Distance:", distance, "Vector:", vector)
-
-# Alternatively, bulk-create an index from a list of vectors.
-vectors = [
-    [0.1] * 128,
-    [0.2] * 128,
-    [0.3] * 128
-]
-index.create(vectors)
 ```
 
 ## Testing
 
-To run the NilVec test suite, execute:
+Run the test suite with:
 
 ```bash
 cargo test
