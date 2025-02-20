@@ -6,9 +6,8 @@ use ordered_float::OrderedFloat;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use rayon::prelude::*;
-use std::cmp::Reverse;
-use std::collections::{BinaryHeap, HashMap};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::collections::HashMap;
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 /// Errors for Flat index operations.
@@ -486,6 +485,7 @@ impl PyFlat {
     /// - `metric`: an optional string ("l2", "cosine", "inner_product") defaulting to "l2".
     /// - `schema`: an optional list of strings representing the schema of the vectors.
     #[new]
+    #[pyo3(signature = (dim, metric=None, schema=None))]
     pub fn new(dim: usize, metric: Option<String>, schema: Option<Vec<String>>) -> PyResult<Self> {
         let metric_enum = match metric.as_deref() {
             Some("cosine") => Some(Metric::Cosine),
@@ -502,6 +502,7 @@ impl PyFlat {
     /// Insert a vector into the index.
     ///
     /// The vector is expected as a list of floats whose length equals the index dimension.
+    #[pyo3(signature = (vector, metadata=None))]
     pub fn insert(
         &mut self,
         vector: Vec<f64>,
@@ -604,6 +605,7 @@ impl PyFlat {
     }
 
     /// Create an index from a list of vectors.
+    #[pyo3(signature = (vectors, metadata=None))]
     pub fn create(
         &mut self,
         vectors: Vec<Vec<f64>>,

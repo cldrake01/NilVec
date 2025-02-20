@@ -7,10 +7,19 @@ license = "MIT"
 repository = "https://github.com/cldrake01/NilVec"
 documentation = ""
 
+[profile.release]
+# opt-level = "z"
+# lto = true
+# debug = true # Enable for flamegraph profiling
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
 name = "nilvec"
-crate-type = ["cdylib"]
+crate-type = ["rlib", "cdylib"]
+
+[[bin]]
+name = "profile"
+path = "src/profile.rs"
 
 [dependencies]
 pyo3 = { version = "0.23.3", features = ["extension-module", "macros"] }

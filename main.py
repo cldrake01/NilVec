@@ -17,9 +17,9 @@ from tqdm import tqdm
 
 # Global Configuration
 
-DIM = 128  # Dimension of each vector
-NUM_INSERTS = 10_000  # Total number of vectors to insert
-QUERY_INTERVAL = 100  # Run a query every 1000 insertions
+DIM = 768  # Dimension of each vector
+NUM_INSERTS = 100_000  # Total number of vectors to insert
+QUERY_INTERVAL = NUM_INSERTS // 100
 CATEGORIES = ["news", "blog", "report"]
 
 # Helper Functions to Manage Docker
@@ -83,23 +83,25 @@ class _Test(ABC):
     ) -> List[Tuple[float, List[float]]]: ...
 
 
-class _PyHNSW(_Test):
+class _NilVecHNSW(_Test):
     def __init__(self, dim):
-        self.index = nilvec.PyHNSW(
-            dim, None, None, None, None, "inner_product", ["category"]
-        )
+        # The new constructor accepts dim, m, ef_construction, ef_search, metric, schema.
+        # We pass None for m, ef_construction, and ef_search so that defaults are used,
+        # specify "inner_product" as the metric, and provide a schema with one attribute.
+        self.index = nilvec.PyHNSW(dim, None, 100, 25, None, ["category"])
 
     def insert(self, vector, metadata, id_val):
-        self.index.insert(vector, metadata)
+        return self.index.insert(
+            vector, [("category", metadata["category"])] if metadata is not None else []
+        )
 
     def search(self, query, k, filter_value=None):
-        if filter_value is not None:
-            return self.index.search(query, k, ("category", filter_value))
-        else:
-            return self.index.search(query, k)
+        return self.index.search(
+            query, k, ("category", filter_value) if filter_value is not None else None
+        )
 
 
-class _PyFlat(_Test):
+class _NilVecFlat(_Test):
     def __init__(self, dim):
         self.index = nilvec.PyFlat(dim, None, ["category"])
 
@@ -239,10 +241,14 @@ class _Redis(_Test):
         if not check_container_running(container_name):
             print("Starting Redis...")
             run_docker_command(
-                f"docker run -d --name {container_name} -p 6379:6379 redis"
+                f"docker run -d --name {container_name} -p 6379:6379 redis/redis-stack:latest"
             )
 
         r = redis.Redis(host="localhost", port=6379, decode_responses=True)
+        # Create an index on HASH documents with key prefix "vec:".
+        # The schema defines:
+        #   - A VECTOR field named "vector" using the FLAT algorithm (with dummy options "6").
+        #   - A TAG field for "category".
         r.execute_command(
             "FT.CREATE redis_index ON HASH PREFIX 1 vec: SCHEMA vector VECTOR FLAT 6 TYPE FLOAT32 DIM 1000 DISTANCE_METRIC COSINE category TAG"
         )
@@ -252,36 +258,84 @@ class _Redis(_Test):
         vector_binary = np.array(vector, dtype=np.float32).tobytes()
         self.index.hset(
             f"vec:{id_val}",
-            mapping={"vector": vector_binary, "category": metadata["category"]},
+            mapping=(
+                {"vector": vector_binary, "category": metadata["category"]}
+                if metadata
+                else {"vector": vector_binary}
+            ),
         )
 
-    def search(self, query, k, filter_value=None):
+    def search(self, query, k, filter_value=None) -> list:
+        # Construct the query string.
+        # If a filter is provided, restrict the search to documents with that category.
+        if filter_value:
+            base_query = f"@category:{{{filter_value}}}"
+        else:
+            base_query = "*"
+        # Append the KNN clause. We alias the returned distance as "score".
+        query_string = f"{base_query}=>[KNN {k} @vector $vector_param AS score]"
+
+        # Convert the query vector to a compact binary representation.
         query_vector = np.array(query, dtype=np.float32).tobytes()
-        query_str = (
-            f"(@category:{{{filter_value}}})=>[KNN {k} @vector $query_vector AS score]"
-            if filter_value
-            else f"[KNN {k} @vector $query_vector AS score]"
-        )
-        return self.index.execute_command(
+
+        # Execute the FT.SEARCH command.
+        # Note: DIALECT 2 is required for vector queries.
+        raw_result = self.index.execute_command(
             "FT.SEARCH",
             "redis_index",
-            query_str,
+            query_string,
             "PARAMS",
-            2,
-            "query_vector",
+            "2",
+            "vector_param",
             query_vector,
+            "DIALECT",
+            "2",
         )
+
+        # The raw_result structure:
+        # [total, key1, [field, value, field, value, ...], key2, [ ... ], ...]
+        results = []
+        # If no results found, raw_result[0] will be 0.
+        if not raw_result or raw_result[0] == 0:
+            return results
+
+        # Iterate over the returned documents.
+        # Note that raw_result[0] is the number of documents.
+        for i in range(1, len(raw_result), 2):
+            # raw_result[i] is the document key.
+            # raw_result[i+1] is a list of field/value pairs.
+            fields = raw_result[i + 1]
+            score = None
+            stored_vector = None
+            for j in range(0, len(fields), 2):
+                field_name = fields[j]
+                field_value = fields[j + 1]
+                if field_name == "score":
+                    # Convert the score to float.
+                    score = float(field_value)
+                elif field_name == "vector":
+                    # Since we stored the vector as binary data,
+                    # and Redis returned it as a string (due to decode_responses=True),
+                    # we must convert it back to bytes.
+                    # The latin1 encoding ensures a 1:1 mapping from characters to byte values.
+                    vector_bytes = field_value.encode("latin1")
+                    # Convert the bytes back to a list of floats.
+                    stored_vector = np.frombuffer(
+                        vector_bytes, dtype=np.float32
+                    ).tolist()
+            results.append((score, stored_vector))
+        return results
 
 
 # Benchmarking
 
 indexes = [
-    {"name": "Qdrant", "index": _Qdrant(DIM)},
     # {"name": "Milvus", "index": _Milvus()},
-    {"name": "Chroma", "index": _Chroma()},
-    # {"name": "Redis", "index": _Redis()},
-    {"name": "PyFlat", "index": _PyFlat(DIM)},
-    # {"name": "PyHNSW", "index": _PyHNSW(dim)},
+    # {"name": "Qdrant", "index": _Qdrant(DIM)},
+    # {"name": "Chroma", "index": _Chroma()},
+    {"name": "Redis", "index": _Redis()},
+    # {"name": "NilVec Flat", "index": _NilVecFlat(DIM)},
+    {"name": "NilVec HNSW", "index": _NilVecHNSW(DIM)},
 ]
 
 insertion_timings: Dict[str, List[float]] = {}
@@ -302,7 +356,8 @@ for idx_entry in indexes:
         metadata = {"category": random.choice(CATEGORIES)}
 
         start_ins = time.perf_counter()
-        index_instance.insert(vector, metadata, i)
+        # index_instance.insert(vector, metadata, i)
+        index_instance.insert(vector, None, i)
         ins_elapsed = time.perf_counter() - start_ins
 
         if (i + 1) % QUERY_INTERVAL == 0:
@@ -310,7 +365,8 @@ for idx_entry in indexes:
             filter_value = random.choice(CATEGORIES)
 
             start_query = time.perf_counter()
-            index_instance.search(query, 5, filter_value)
+            # index_instance.search(query, 5, filter_value)
+            index_instance.search(query, 5, None)
             query_elapsed = time.perf_counter() - start_query
 
             query_indices.append(i + 1)
@@ -339,4 +395,6 @@ ax.set_xlabel("Number of Insertions")
 ax.set_ylabel("Query Time (seconds)")
 ax.legend()
 plt.tight_layout()
+plt.savefig("query_scaling.png")
+kill_all_containers()
 plt.show()

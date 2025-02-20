@@ -1,9 +1,9 @@
 mod candidate;
 mod filter;
-mod flat;
-mod hnsw;
-mod metadata;
-mod metric;
+pub mod flat;
+pub mod hnsw;
+pub mod metadata;
+pub mod metric;
 
 use crate::flat::PyFlat;
 use crate::hnsw::PyHNSW;
